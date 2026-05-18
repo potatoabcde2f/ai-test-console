@@ -143,9 +143,9 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
     };
 
     try {
-      const mergedSystem = `${task.systemPrompt}\n\n--- User Profile ---\n${task.userProfile}`;
+      let mergedSystem = `${task.systemPrompt}\n\n--- User Profile ---\n${task.userProfile}`;
       if (task.memory) {
-        mergedSystem.concat(`\n\n--- Memory ---\n${task.memory}`);
+        mergedSystem = mergedSystem.concat(`\n\n--- Memory ---\n${task.memory}`);
       }
 
       const outs = await Promise.all(
