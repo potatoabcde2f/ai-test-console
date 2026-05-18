@@ -155,7 +155,8 @@ export type NavKey =
   | "conversations"
   | "compare"
   | "promptCompare"
-  | "questionBank";
+  | "questionBank"
+  | "batchTest";
 
 // 问题库相关类型
 export interface Question {
@@ -175,4 +176,95 @@ export interface QuestionCategory {
 
 export interface QuestionBank {
   categories: QuestionCategory[];
+}
+
+// 批量测试相关类型
+export type BatchTestStatus = "running" | "completed";
+
+/** 批量测试任务中的单个问题结果 */
+export interface BatchTestResult {
+  /** 模型ID */
+  modelId: string;
+  /** 模型回复内容 */
+  content: string;
+  /** 人工评分 0-10 */
+  score: number | null;
+  /** 是否通过 */
+  verdict: Verdict;
+  /** 优化点备注 */
+  optimizationNotes: string;
+  /** 白盒数据：问题类型 */
+  questionType?: string;
+  /** 白盒数据：意图识别 */
+  intent?: string;
+  /** 白盒数据：生图提示词（如有） */
+  imageGenPrompt?: string;
+  /** 创建时间 */
+  createdAt: number;
+}
+
+/** 批量测试任务的单个问题轮次 */
+export interface BatchTestRound {
+  id: string;
+  /** 问题ID */
+  questionId: string;
+  /** 问题内容 */
+  questionContent: string;
+  /** 各模型结果 */
+  results: Record<string, BatchTestResult>;
+  /** 最优模型ID（多模型时选择） */
+  bestModelId: string | null;
+  /** 创建时间 */
+  createdAt: number;
+}
+
+/** 批量测试任务 */
+export interface BatchTestTask {
+  id: string;
+  /** 任务名称 */
+  name: string;
+  /** 状态 */
+  status: BatchTestStatus;
+  /** 选中的问题分类ID */
+  questionCategoryId: string;
+  /** 问题数量 */
+  questionCount: number;
+  /** 选中的模型IDs */
+  modelIds: string[];
+  /** 选中的提示词ID */
+  promptId: string;
+  /** 系统提示词内容（快照） */
+  systemPrompt: string;
+  /** 用户画像 */
+  userProfile: string;
+  /** 记忆 */
+  memory: string;
+  /** 测试轮次 */
+  rounds: BatchTestRound[];
+  /** 汇总统计 */
+  summary?: {
+    totalRounds: number;
+    /** 各模型统计 */
+    modelStats: Record<string, {
+      totalScore: number;
+      scoredRounds: number;
+      avgScore: number | null;
+      passCount: number;
+      failCount: number;
+      pendingCount: number;
+    }>;
+    /** 平均通过率 */
+    avgPassRate: number;
+    /** 结束时间 */
+    endedAt: number;
+  };
+  createdAt: number;
+}
+
+/** 批量测试配置（用于快速复用） */
+export interface BatchTestConfig {
+  name: string;
+  promptId: string;
+  userProfile: string;
+  memory: string;
 }

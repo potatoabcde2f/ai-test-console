@@ -5,6 +5,7 @@ import type {
   PromptTemplate,
   StoredConversation,
   QuestionBank,
+  BatchTestTask,
 } from "../types";
 
 const KEY = "ai-console-persist-v2";
@@ -18,6 +19,7 @@ export interface PersistedBundle {
   compareTasks: CompareTask[];
   promptCompareTasks?: PromptCompareTask[];
   questionBank?: QuestionBank;
+  batchTestTasks?: BatchTestTask[];
 }
 
 export function loadBundle(): Partial<PersistedBundle> | null {

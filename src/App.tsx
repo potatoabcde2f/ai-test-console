@@ -11,6 +11,7 @@ import type {
   StoredConversation,
   PromptCategory,
   QuestionBank,
+  BatchTestTask,
 } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { DialogueTestView } from "./views/DialogueTestView";
@@ -20,6 +21,7 @@ import { ConversationResultsView } from "./views/ConversationResultsView";
 import { ModelCompareView } from "./views/ModelCompareView";
 import { PromptCompareView } from "./views/PromptCompareView";
 import { QuestionBankView } from "./views/QuestionBankView";
+import { BatchTestView } from "./views/BatchTestView";
 import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { mockAssistantReply } from "./lib/mockAI";
@@ -144,6 +146,11 @@ export function App() {
     return b?.questionBank ?? { categories: [] };
   });
 
+  const [batchTestTasks, setBatchTestTasks] = useState<BatchTestTask[]>(() => {
+    const b = loadBundle();
+    return (b?.batchTestTasks as BatchTestTask[]) ?? [];
+  });
+
   useEffect(() => {
     saveBundle({
       prompts,
@@ -154,8 +161,9 @@ export function App() {
       compareTasks,
       promptCompareTasks,
       questionBank,
+      batchTestTasks,
     });
-  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank]);
+  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks]);
 
   const activePrompt = useMemo(
     () => prompts.find((p) => p.id === activePromptId) ?? prompts[0]!,
@@ -394,6 +402,14 @@ export function App() {
           )}
           {nav === "questionBank" && (
             <QuestionBankView questionBank={questionBank} onChange={setQuestionBank} />
+          )}
+          {nav === "batchTest" && (
+            <BatchTestView
+              tasks={batchTestTasks}
+              onChangeTasks={setBatchTestTasks}
+              questionBank={questionBank}
+              prompts={prompts}
+            />
           )}
         </div>
       </main>
