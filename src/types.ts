@@ -249,12 +249,7 @@ export interface BatchTestTask {
       totalScore: number;
       scoredRounds: number;
       avgScore: number | null;
-      passCount: number;
-      failCount: number;
-      pendingCount: number;
     }>;
-    /** 平均通过率 */
-    avgPassRate: number;
     /** 结束时间 */
     endedAt: number;
   };

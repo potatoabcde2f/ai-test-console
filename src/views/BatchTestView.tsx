@@ -5,7 +5,6 @@ import type {
   BatchTestResult,
   QuestionBank,
   PromptTemplate,
-  Verdict,
 } from "../types";
 import { PROMPT_CATEGORY_LABELS } from "../types";
 import { MODEL_PRESETS } from "../lib/models";
@@ -22,12 +21,6 @@ interface Props {
 const EMPTY_BANK: QuestionBank = {
   categories: [],
 };
-
-const VERDICT_OPTIONS: { value: Verdict; label: string; color: string }[] = [
-  { value: "pending", label: "待定", color: "#64748b" },
-  { value: "pass", label: "通过", color: "#16a34a" },
-  { value: "fail", label: "不通过", color: "#dc2626" },
-];
 
 export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: Props) {
   const bank = questionBank ?? EMPTY_BANK;
@@ -163,7 +156,7 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
             {
               content: r.content,
               score: null,
-              verdict: "pending" as Verdict,
+              verdict: "pending",
               optimizationNotes: "",
               questionType: undefined,
               intent: undefined,
@@ -238,26 +231,6 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
     [onChangeTasks]
   );
 
-  // 更新结果 verdict
-  const updateResultVerdict = useCallback(
-    (taskId: string, roundId: string, modelId: string, verdict: Verdict) => {
-      onChangeTasks((prev) =>
-        prev.map((t) => {
-          if (t.id !== taskId) return t;
-          return {
-            ...t,
-            rounds: t.rounds.map((r) =>
-              r.id === roundId
-                ? { ...r, results: { ...r.results, [modelId]: { ...r.results[modelId], verdict } } }
-                : r
-            ),
-          };
-        })
-      );
-    },
-    [onChangeTasks]
-  );
-
   // 更新优化备注
   const updateResultNotes = useCallback(
     (taskId: string, roundId: string, modelId: string, notes: string) => {
@@ -304,29 +277,16 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
       return;
     }
 
-    const modelStats: Record<string, { totalScore: number; scoredRounds: number; avgScore: number | null; passCount: number; failCount: number; pendingCount: number }> = {};
+    const modelStats: Record<string, { totalScore: number; scoredRounds: number; avgScore: number | null }> = {};
     task.modelIds.forEach((mid) => {
-      modelStats[mid] = { totalScore: 0, scoredRounds: 0, avgScore: null, passCount: 0, failCount: 0, pendingCount: 0 };
+      modelStats[mid] = { totalScore: 0, scoredRounds: 0, avgScore: null };
     });
-
-    let totalPass = 0;
-    let totalEvaluated = 0;
 
     task.rounds.forEach((r) => {
       Object.entries(r.results).forEach(([mid, res]) => {
         if (res.score != null) {
           modelStats[mid].totalScore += res.score;
           modelStats[mid].scoredRounds++;
-        }
-        if (res.verdict === "pass") {
-          modelStats[mid].passCount++;
-          totalPass++;
-          totalEvaluated++;
-        } else if (res.verdict === "fail") {
-          modelStats[mid].failCount++;
-          totalEvaluated++;
-        } else {
-          modelStats[mid].pendingCount++;
         }
       });
     });
@@ -337,8 +297,6 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
       }
     });
 
-    const avgPassRate = totalEvaluated > 0 ? Math.round((totalPass / totalEvaluated) * 100) / 100 : 0;
-
     onChangeTasks((prev) =>
       prev.map((t) =>
         t.id === task.id
@@ -348,7 +306,6 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
               summary: {
                 totalRounds: task.rounds.length,
                 modelStats,
-                avgPassRate,
                 endedAt: Date.now(),
               },
             }
@@ -372,13 +329,7 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
   const getTaskProgress = (task: BatchTestTask) => {
     const testedCount = task.rounds.length;
     const totalCount = task.questionCount;
-    const passCount = task.rounds.reduce((sum, r) => {
-      return sum + Object.values(r.results).filter((res) => res.verdict === "pass").length;
-    }, 0);
-    const failCount = task.rounds.reduce((sum, r) => {
-      return sum + Object.values(r.results).filter((res) => res.verdict === "fail").length;
-    }, 0);
-    return { testedCount, totalCount, passCount, failCount };
+    return { testedCount, totalCount };
   };
 
   return (
@@ -738,53 +689,35 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
                               {/* 评测区域 */}
                               {isEditing ? (
                                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                                  <div style={{ display: "flex", gap: 6 }}>
-                                    {VERDICT_OPTIONS.map((opt) => (
-                                      <button
-                                        key={opt.value}
-                                        type="button"
-                                        className="btn"
-                                        style={{
-                                          fontSize: "0.7rem",
-                                          padding: "2px 8px",
-                                          borderColor: res.verdict === opt.value ? opt.color : undefined,
-                                          color: res.verdict === opt.value ? opt.color : undefined,
-                                        }}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          updateResultVerdict(activeTask.id, round.id, mid, opt.value);
-                                        }}
-                                      >
-                                        {opt.label}
-                                      </button>
-                                    ))}
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>评分：</span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={10}
+                                      step={0.5}
+                                      placeholder="0-10"
+                                      value={res.score ?? ""}
+                                      onChange={(e) => {
+                                        const score = e.target.value === "" ? null : Number(e.target.value);
+                                        updateResultScore(activeTask.id, round.id, mid, score);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="input"
+                                      style={{ fontSize: "0.75rem", width: 80 }}
+                                    />
                                   </div>
-                                  <input
-                                    type="number"
-                                    min={0}
-                                    max={10}
-                                    step={0.5}
-                                    placeholder="评分 0-10"
-                                    value={res.score ?? ""}
-                                    onChange={(e) => {
-                                      const score = e.target.value === "" ? null : Number(e.target.value);
-                                      updateResultScore(activeTask.id, round.id, mid, score);
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="input"
-                                    style={{ fontSize: "0.75rem", width: 100 }}
-                                  />
                                   <textarea
-                                    placeholder="优化点备注..."
+                                    placeholder="备注..."
                                     value={res.optimizationNotes}
                                     onChange={(e) => updateResultNotes(activeTask.id, round.id, mid, e.target.value)}
                                     onClick={(e) => e.stopPropagation()}
                                     className="textarea-field"
-                                    style={{ fontSize: "0.75rem", minHeight: 60 }}
+                                    style={{ fontSize: "0.75rem", minHeight: 50 }}
                                   />
                                   <button
                                     type="button"
-                                    className="btn"
+                                    className="btn btn-primary"
                                     style={{ fontSize: "0.7rem" }}
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -796,28 +729,11 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
                                 </div>
                               ) : (
                                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                                  {/* Verdict badge */}
-                                  <span
-                                    className="badge"
-                                    style={{
-                                      background:
-                                        res.verdict === "pass"
-                                          ? "rgba(22,163,74,0.1)"
-                                          : res.verdict === "fail"
-                                            ? "rgba(220,38,38,0.1)"
-                                            : "rgba(100,116,139,0.1)",
-                                      color:
-                                        res.verdict === "pass" ? "#16a34a" : res.verdict === "fail" ? "#dc2626" : "#64748b",
-                                      fontSize: "0.7rem",
-                                    }}
-                                  >
-                                    {VERDICT_OPTIONS.find((o) => o.value === res.verdict)?.label}
-                                  </span>
                                   {/* Score */}
                                   {res.score != null && (
                                     <span style={{ fontSize: "0.75rem", color: "var(--accent)" }}>评分: {res.score}</span>
                                   )}
-                                  {/* Optimization notes indicator */}
+                                  {/* Notes indicator */}
                                   {res.optimizationNotes && (
                                     <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>有备注</span>
                                   )}
@@ -831,7 +747,7 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
                                       setEditingResult({ roundId: round.id, modelId: mid });
                                     }}
                                   >
-                                    评测
+                                    编辑
                                   </button>
                                 </div>
                               )}
@@ -924,15 +840,6 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
                     </span>
                   </div>
 
-                  {/* 评测统计 */}
-                  {progress.testedCount > 0 && (
-                    <div style={{ marginTop: 8, fontSize: "0.75rem", display: "flex", gap: 12 }}>
-                      <span style={{ color: "#16a34a" }}>✓ 通过 {progress.passCount}</span>
-                      <span style={{ color: "#dc2626" }}>✗ 不通过 {progress.failCount}</span>
-                      <span style={{ color: "var(--text-muted)" }}>○ 待定 {progress.testedCount * task.modelIds.length - progress.passCount - progress.failCount}</span>
-                    </div>
-                  )}
-
                   {/* 已完成任务摘要 */}
                   {!isRunning && task.summary && (
                     <div
@@ -949,15 +856,11 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
                           <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>总问题数</span>
                           <div style={{ fontWeight: 700 }}>{task.summary.totalRounds}</div>
                         </div>
-                        <div>
-                          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>平均通过率</span>
-                          <div style={{ fontWeight: 700, color: "var(--accent)" }}>{(task.summary.avgPassRate * 100).toFixed(0)}%</div>
-                        </div>
                         {Object.entries(task.summary.modelStats).map(([mid, s]) => (
                           <div key={mid}>
                             <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{getModelLabel(mid)}</span>
                             <div style={{ fontWeight: 600 }}>
-                              均分{s.avgScore ?? "—"} · 通过{s.passCount}
+                              均分{s.avgScore ?? "—"}
                             </div>
                           </div>
                         ))}
