@@ -154,4 +154,25 @@ export type NavKey =
   | "prompts"
   | "conversations"
   | "compare"
-  | "promptCompare";
+  | "promptCompare"
+  | "questionBank";
+
+// 问题库相关类型
+export interface Question {
+  id: string;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface QuestionCategory {
+  id: string;
+  name: string;
+  questions: Question[];
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface QuestionBank {
+  categories: QuestionCategory[];
+}

@@ -7,6 +7,7 @@ const ITEMS: { key: NavKey; label: string; icon: string }[] = [
   { key: "images", label: "生图结果存储", icon: "▣" },
   { key: "promptCompare", label: "提示词对比", icon: "◇" },
   { key: "compare", label: "生文模型对比", icon: "◈" },
+  { key: "questionBank", label: "问题库管理", icon: "?" },
 ];
 
 interface Props {

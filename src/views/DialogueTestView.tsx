@@ -1,4 +1,5 @@
 import type { ChatMessage, Evaluation, PromptTemplate } from "../types";
+import { PROMPT_CATEGORY_LABELS } from "../types";
 import { ChatArea } from "../components/ChatArea";
 import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "../lib/models";
 
@@ -140,7 +141,7 @@ export function DialogueTestView({
               style={{ opacity: configLocked ? 0.55 : 1 }}
             >
               {prompts.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
+                <option key={p.id} value={p.id}>【{PROMPT_CATEGORY_LABELS[p.category]}】{p.name}</option>
               ))}
             </select>
           </div>

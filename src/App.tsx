@@ -10,6 +10,7 @@ import type {
   PromptTemplate,
   StoredConversation,
   PromptCategory,
+  QuestionBank,
 } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { DialogueTestView } from "./views/DialogueTestView";
@@ -18,6 +19,7 @@ import { PromptStorageView } from "./views/PromptStorageView";
 import { ConversationResultsView } from "./views/ConversationResultsView";
 import { ModelCompareView } from "./views/ModelCompareView";
 import { PromptCompareView } from "./views/PromptCompareView";
+import { QuestionBankView } from "./views/QuestionBankView";
 import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { mockAssistantReply } from "./lib/mockAI";
@@ -137,6 +139,11 @@ export function App() {
     return (b?.promptCompareTasks as PromptCompareTask[]) ?? [];
   });
 
+  const [questionBank, setQuestionBank] = useState<QuestionBank>(() => {
+    const b = loadBundle();
+    return b?.questionBank ?? { categories: [] };
+  });
+
   useEffect(() => {
     saveBundle({
       prompts,
@@ -146,8 +153,9 @@ export function App() {
       images,
       compareTasks,
       promptCompareTasks,
+      questionBank,
     });
-  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks]);
+  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank]);
 
   const activePrompt = useMemo(
     () => prompts.find((p) => p.id === activePromptId) ?? prompts[0]!,
@@ -383,6 +391,9 @@ export function App() {
           {nav === "compare" && <ModelCompareView tasks={compareTasks} onChangeTasks={setCompareTasks} />}
           {nav === "promptCompare" && (
             <PromptCompareView tasks={promptCompareTasks} prompts={prompts} onChangeTasks={setPromptCompareTasks} />
+          )}
+          {nav === "questionBank" && (
+            <QuestionBankView questionBank={questionBank} onChange={setQuestionBank} />
           )}
         </div>
       </main>
