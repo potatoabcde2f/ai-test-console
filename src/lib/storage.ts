@@ -8,6 +8,7 @@ import type {
   BatchTestTask,
   PromptCategoryConfig,
   IntentTestTask,
+  IntentTestDataset,
 } from "../types";
 
 const KEY = "ai-console-persist-v2";
@@ -26,6 +27,7 @@ export interface PersistedBundle {
   textModelId?: string;
   imageModelId?: string;
   intentTestTasks?: IntentTestTask[];
+  intentTestDatasets?: IntentTestDataset[];
 }
 
 export function loadBundle(): Partial<PersistedBundle> | null {

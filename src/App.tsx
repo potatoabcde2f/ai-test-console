@@ -13,6 +13,7 @@ import type {
   BatchTestTask,
   PromptCategoryConfig,
   IntentTestTask,
+  IntentTestDataset,
 } from "./types";
 import { DEFAULT_PROMPT_CATEGORIES } from "./types";
 import { Sidebar } from "./components/Sidebar";
@@ -160,6 +161,11 @@ export function App() {
     return (b?.intentTestTasks as IntentTestTask[]) ?? [];
   });
 
+  const [intentTestDatasets, setIntentTestDatasets] = useState<IntentTestDataset[]>(() => {
+    const b = loadBundle();
+    return (b?.intentTestDatasets as IntentTestDataset[]) ?? [];
+  });
+
   const [promptCategories, setPromptCategories] = useState<PromptCategoryConfig[]>(() => {
     const b = loadBundle();
     return b?.promptCategories ?? [...DEFAULT_PROMPT_CATEGORIES];
@@ -180,8 +186,9 @@ export function App() {
       textModelId,
       imageModelId,
       intentTestTasks,
+      intentTestDatasets,
     });
-  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks, promptCategories, textModelId, imageModelId, intentTestTasks]);
+  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks, promptCategories, textModelId, imageModelId, intentTestTasks, intentTestDatasets]);
 
   const activePrompt = useMemo(
     () => prompts.find((p) => p.id === activePromptId) ?? prompts[0],
@@ -426,6 +433,8 @@ export function App() {
             <IntentTestView
               tasks={intentTestTasks}
               onChangeTasks={setIntentTestTasks}
+              datasets={intentTestDatasets}
+              onChangeDatasets={setIntentTestDatasets}
               questionBank={questionBank}
               prompts={prompts}
             />
