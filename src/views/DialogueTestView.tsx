@@ -1,7 +1,6 @@
 import type { ChatMessage, Evaluation, PromptTemplate } from "../types";
 import { PROMPT_CATEGORY_LABELS } from "../types";
 import { ChatArea } from "../components/ChatArea";
-import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "../lib/models";
 
 interface Props {
   prompts: PromptTemplate[];
@@ -10,14 +9,6 @@ interface Props {
   onOpenPromptLibrary: () => void;
   userProfile: string;
   onUserProfile: (v: string) => void;
-  // 生文模型
-  textModelId: string;
-  onTextModelChange: (id: string) => void;
-  // 生图模型
-  imageModelId: string;
-  onImageModelChange: (id: string) => void;
-  modelLocked: boolean;
-  modelLockHint: string;
   configLocked: boolean;
   configLockHint: string;
   messages: ChatMessage[];
@@ -44,12 +35,6 @@ export function DialogueTestView({
   onOpenPromptLibrary,
   userProfile,
   onUserProfile,
-  textModelId,
-  onTextModelChange,
-  imageModelId,
-  onImageModelChange,
-  modelLocked,
-  modelLockHint,
   configLocked,
   configLockHint,
   messages,
@@ -87,44 +72,6 @@ export function DialogueTestView({
         <div className="panel scroll-y" style={{ padding: "0.85rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <div style={{ fontWeight: 600, fontSize: "0.9rem", paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
             ⚙️ 配置区
-          </div>
-
-          {/* 生文模型 */}
-          <div>
-            <label className="label">
-              生文模型
-              {modelLocked && <span className="chip" style={{ marginLeft: 8, fontSize: "0.7rem" }}>{modelLockHint}</span>}
-            </label>
-            <select
-              className="select"
-              value={textModelId}
-              onChange={(e) => onTextModelChange(e.target.value)}
-              disabled={modelLocked}
-              style={{ opacity: modelLocked ? 0.55 : 1 }}
-            >
-              {MODEL_PRESETS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
-          </div>
-
-          {/* 生图模型 */}
-          <div>
-            <label className="label">
-              生图模型
-              {modelLocked && <span className="chip" style={{ marginLeft: 8, fontSize: "0.7rem" }}>{modelLockHint}</span>}
-            </label>
-            <select
-              className="select"
-              value={imageModelId}
-              onChange={(e) => onImageModelChange(e.target.value)}
-              disabled={modelLocked}
-              style={{ opacity: modelLocked ? 0.55 : 1 }}
-            >
-              {IMAGE_GEN_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>{m.label}</option>
-              ))}
-            </select>
           </div>
 
           {/* 提示词版本 */}
@@ -178,12 +125,6 @@ export function DialogueTestView({
         {/* 中间：对话区 */}
         <div style={{ minHeight: 0, display: "flex", flexDirection: "column" }}>
           <ChatArea
-            textModelId={textModelId}
-            imageModelId={imageModelId}
-            onTextModelChange={onTextModelChange}
-            onImageModelChange={onImageModelChange}
-            modelLocked={modelLocked}
-            modelLockHint={modelLockHint}
             messages={messages}
             loading={loading}
             input={input}

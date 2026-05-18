@@ -1,14 +1,7 @@
 import { useRef } from "react";
 import type { ChatMessage } from "../types";
-import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "../lib/models";
 
 interface Props {
-  textModelId: string;
-  imageModelId: string;
-  onTextModelChange: (id: string) => void;
-  onImageModelChange: (id: string) => void;
-  modelLocked: boolean;
-  modelLockHint: string;
   messages: ChatMessage[];
   loading: boolean;
   input: string;
@@ -18,12 +11,6 @@ interface Props {
 }
 
 export function ChatArea({
-  textModelId,
-  imageModelId,
-  onTextModelChange,
-  onImageModelChange,
-  modelLocked,
-  modelLockHint,
   messages,
   loading,
   input,
@@ -60,46 +47,9 @@ export function ChatArea({
       onDrop={handleDrop}
       onDragOver={handleDragOver}
     >
-      {/* 头部：模型选择 */}
-      <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid var(--border)", display: "flex", flexWrap: "wrap", gap: "0.65rem", alignItems: "center" }}>
+      {/* 头部 */}
+      <div style={{ padding: "0.75rem 1rem", borderBottom: "1px solid var(--border)" }}>
         <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>对话区</span>
-        <span className="chip" style={{ maxWidth: "100%" }}>
-          {modelLockHint}
-        </span>
-        <div style={{ marginLeft: "auto", display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <label className="label" style={{ margin: 0, fontSize: "0.75rem" }}>生文模型</label>
-            <select
-              className="select"
-              style={{ width: "auto", minWidth: 140, opacity: modelLocked ? 0.55 : 1 }}
-              value={textModelId}
-              disabled={modelLocked}
-              onChange={(e) => onTextModelChange(e.target.value)}
-            >
-              {MODEL_PRESETS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <label className="label" style={{ margin: 0, fontSize: "0.75rem" }}>生图模型</label>
-            <select
-              className="select"
-              style={{ width: "auto", minWidth: 140, opacity: modelLocked ? 0.55 : 1 }}
-              value={imageModelId}
-              disabled={modelLocked}
-              onChange={(e) => onImageModelChange(e.target.value)}
-            >
-              {IMAGE_GEN_MODELS.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
       </div>
 
       {/* 消息区域 */}

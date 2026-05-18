@@ -22,7 +22,7 @@ import { ModelCompareView } from "./views/ModelCompareView";
 import { PromptCompareView } from "./views/PromptCompareView";
 import { QuestionBankView } from "./views/QuestionBankView";
 import { BatchTestView } from "./views/BatchTestView";
-import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
+import { MODEL_PRESETS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { mockAssistantReply } from "./lib/mockAI";
 import { uid } from "./lib/ids";
@@ -114,14 +114,12 @@ export function App() {
   const [activePromptId, setActivePromptId] = useState(() => {
     const b = loadBundle();
     const list = b?.prompts?.length ? b.prompts : [...DEFAULT_PROMPTS];
-    return list[0]!.id;
+    return list[0]?.id ?? "";
   });
 
   const [userProfile, setUserProfile] = useState(() => loadBundle()?.userProfile ?? DEFAULT_USER_PROFILE);
   const [memory, setMemory] = useState(() => loadBundle()?.memory ?? "");
 
-  const [textModelId, setTextModelId] = useState(MODEL_PRESETS[0]!.id);
-  const [imageModelId, setImageModelId] = useState(IMAGE_GEN_MODELS[0]!.id);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -166,20 +164,13 @@ export function App() {
   }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks]);
 
   const activePrompt = useMemo(
-    () => prompts.find((p) => p.id === activePromptId) ?? prompts[0]!,
+    () => prompts.find((p) => p.id === activePromptId) ?? prompts[0],
     [prompts, activePromptId]
   );
 
-  const textModel = useMemo(() => MODEL_PRESETS.find((m) => m.id === textModelId) ?? MODEL_PRESETS[0]!, [textModelId]);
-
-  const modelLocked = messages.length > 0;
-  const modelLockHint = modelLocked
-    ? "本轮已锁定模型；请先完成打标并「保存到对话库」，将自动清空后方可切换模型"
-    : "当前无对话，可自由选择生文和生图模型后开始新一轮";
-
   const configLocked = messages.length > 0;
   const configLockHint = configLocked
-    ? "本轮已锁定配置；请先完成打标并「保存到对话库」，将自动清空后方可更换提示词、模型或 User Profile"
+    ? "本轮已锁定配置；请先完成打标并「保存到对话库」，将自动清空后方可更换提示词、User Profile"
     : "当前无对话，可自由配置后开始新一轮";
 
   const canSaveToLibrary = messages.length > 0 && evaluation.verdict !== "pending";
@@ -221,7 +212,7 @@ export function App() {
       setPrompts((prev) => {
         if (prev.length <= 1) return prev;
         const next = prev.filter((p) => p.id !== id);
-        if (!next.some((p) => p.id === activePromptId)) setActivePromptId(next[0]!.id);
+        if (!next.some((p) => p.id === activePromptId)) setActivePromptId(next[0]?.id ?? "");
         return next;
       });
     },
@@ -245,9 +236,9 @@ export function App() {
     const visible = [...messages, userMsg];
 
     try {
-      const mergedSystem = `${activePrompt.systemPrompt}\n\n--- User Profile ---\n${userProfile}`;
+      const mergedSystem = `${activePrompt?.systemPrompt ?? ""}\n\n--- User Profile ---\n${userProfile}`;
       const result = await mockAssistantReply({
-        model: textModel,
+        model: MODEL_PRESETS[0],
         systemPrompt: mergedSystem,
         userProfile,
         visibleMessages: visible,
@@ -258,7 +249,7 @@ export function App() {
         id: uid("msg"),
         role: "assistant",
         content: result.content,
-        modelId: textModel.id,
+        modelId: MODEL_PRESETS[0].id,
         createdAt: Date.now(),
       };
       setMessages((prev) => [...prev, asst]);
@@ -268,7 +259,7 @@ export function App() {
     } finally {
       setLoading(false);
     }
-  }, [input, loading, messages, activePrompt, textModel, userProfile, dialogueSessionId]);
+  }, [input, loading, messages, activePrompt, userProfile, dialogueSessionId]);
 
   const uploadImage = useCallback((file: File) => {
     const reader = new FileReader();
@@ -289,7 +280,7 @@ export function App() {
           id: uid("msg"),
           role: "assistant",
           content: "我已收到您上传的图片。这是一张示例图片。",
-          modelId: textModel.id,
+          modelId: MODEL_PRESETS[0].id,
           createdAt: Date.now(),
         };
         setMessages((prev) => [...prev, asst]);
@@ -297,7 +288,7 @@ export function App() {
       }, 800);
     };
     reader.readAsDataURL(file);
-  }, [input, textModel]);
+  }, [input]);
 
   const saveToLibrary = useCallback(() => {
     if (messages.length === 0) return;
@@ -313,11 +304,11 @@ export function App() {
       title,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      modelId: textModelId,
-      imageModelId,
-      promptId: activePrompt.id,
-      promptVersionName: activePrompt.name,
-      systemPromptContent: activePrompt.systemPrompt,
+      modelId: MODEL_PRESETS[0].id,
+      imageModelId: "",
+      promptId: activePrompt?.id ?? "",
+      promptVersionName: activePrompt?.name ?? "未命名",
+      systemPromptContent: activePrompt?.systemPrompt ?? "",
       userProfileSnapshot: userProfile,
       sessionKey: dialogueSessionId,
       messages: messages.map((m) => ({ ...m })),
@@ -333,8 +324,8 @@ export function App() {
     setEvaluation(defaultEval());
     setInput("");
     setDialogueSessionId(uid("dlg"));
-    window.alert("已保存到「对话结果存储」。对话已清空，可重新选择模型开始新一轮。");
-  }, [textModelId, activePrompt, userProfile, dialogueSessionId, messages, evaluation]);
+    window.alert("已保存到「对话结果存储」。对话已清空，可重新开始新一轮。");
+  }, [activePrompt, userProfile, dialogueSessionId, messages, evaluation]);
 
   const updateConversationEval = useCallback((id: string, ev: Evaluation) => {
     setConversations((prev) =>
@@ -359,12 +350,6 @@ export function App() {
               onOpenPromptLibrary={() => setNav("prompts")}
               userProfile={userProfile}
               onUserProfile={setUserProfile}
-              textModelId={textModelId}
-              onTextModelChange={setTextModelId}
-              imageModelId={imageModelId}
-              onImageModelChange={setImageModelId}
-              modelLocked={modelLocked}
-              modelLockHint={modelLockHint}
               configLocked={configLocked}
               configLockHint={configLockHint}
               messages={messages}
@@ -385,7 +370,7 @@ export function App() {
           {nav === "prompts" && (
             <PromptStorageView
               prompts={prompts}
-              activeId={activePrompt.id}
+              activeId={activePrompt?.id ?? ""}
               onSelect={setActivePromptId}
               onChange={patchPrompt}
               onDuplicate={duplicatePrompt}
