@@ -12,6 +12,7 @@ import type {
   QuestionBank,
   BatchTestTask,
   PromptCategoryConfig,
+  IntentTestTask,
 } from "./types";
 import { DEFAULT_PROMPT_CATEGORIES } from "./types";
 import { Sidebar } from "./components/Sidebar";
@@ -23,6 +24,7 @@ import { ModelCompareView } from "./views/ModelCompareView";
 import { PromptCompareView } from "./views/PromptCompareView";
 import { QuestionBankView } from "./views/QuestionBankView";
 import { BatchTestView } from "./views/BatchTestView";
+import { IntentTestView } from "./views/IntentTestView";
 import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { mockAssistantReply } from "./lib/mockAI";
@@ -153,6 +155,11 @@ export function App() {
     return (b?.batchTestTasks as BatchTestTask[]) ?? [];
   });
 
+  const [intentTestTasks, setIntentTestTasks] = useState<IntentTestTask[]>(() => {
+    const b = loadBundle();
+    return (b?.intentTestTasks as IntentTestTask[]) ?? [];
+  });
+
   const [promptCategories, setPromptCategories] = useState<PromptCategoryConfig[]>(() => {
     const b = loadBundle();
     return b?.promptCategories ?? [...DEFAULT_PROMPT_CATEGORIES];
@@ -172,8 +179,9 @@ export function App() {
       promptCategories,
       textModelId,
       imageModelId,
+      intentTestTasks,
     });
-  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks, promptCategories, textModelId, imageModelId]);
+  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks, promptCategories, textModelId, imageModelId, intentTestTasks]);
 
   const activePrompt = useMemo(
     () => prompts.find((p) => p.id === activePromptId) ?? prompts[0],
@@ -410,6 +418,14 @@ export function App() {
             <BatchTestView
               tasks={batchTestTasks}
               onChangeTasks={setBatchTestTasks}
+              questionBank={questionBank}
+              prompts={prompts}
+            />
+          )}
+          {nav === "intentTest" && (
+            <IntentTestView
+              tasks={intentTestTasks}
+              onChangeTasks={setIntentTestTasks}
               questionBank={questionBank}
               prompts={prompts}
             />

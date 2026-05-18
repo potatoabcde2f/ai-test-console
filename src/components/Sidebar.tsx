@@ -6,6 +6,7 @@ const ITEMS: { key: NavKey; label: string; icon: string }[] = [
   { key: "conversations", label: "对话结果存储", icon: "☰" },
   { key: "images", label: "生图结果存储", icon: "▣" },
   { key: "batchTest", label: "批量测试", icon: "▸" },
+  { key: "intentTest", label: "意图识别测试", icon: "◎" },
   { key: "questionBank", label: "问题库管理", icon: "?" },
 ];
 

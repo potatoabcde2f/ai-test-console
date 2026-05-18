@@ -161,7 +161,8 @@ export type NavKey =
   | "compare"
   | "promptCompare"
   | "questionBank"
-  | "batchTest";
+  | "batchTest"
+  | "intentTest";
 
 // 问题库相关类型
 export interface Question {
@@ -270,4 +271,65 @@ export interface BatchTestConfig {
   promptId: string;
   userProfile: string;
   memory: string;
+}
+
+// 意图识别测试相关类型
+export type IntentTestStatus = "running" | "completed";
+
+/** 意图识别测试的评测项 */
+export interface IntentTestItem {
+  id: string;
+  /** 问题内容 */
+  question: string;
+  /** 人工标注的意图类型 */
+  humanLabel: string;
+  /** AI识别的意图类型 */
+  aiLabel?: string;
+  /** 是否匹配 */
+  isMatch?: boolean;
+  createdAt: number;
+}
+
+/** 意图识别测试任务 */
+export interface IntentTestTask {
+  id: string;
+  /** 任务名称 */
+  name: string;
+  /** 状态 */
+  status: IntentTestStatus;
+  /** 评测集（问题+人工标注） */
+  items: IntentTestItem[];
+  /** 选中的提示词ID */
+  promptId: string;
+  /** 系统提示词内容（快照） */
+  systemPrompt: string;
+  /** 选择的模型ID */
+  modelId: string;
+  /** 测试进度 */
+  progress: {
+    current: number;
+    total: number;
+  };
+  /** 汇总统计 */
+  summary?: {
+    totalItems: number;
+    matchedCount: number;
+    failedCount: number;
+    accuracy: number;
+    endedAt: number;
+  };
+  createdAt: number;
+  updatedAt: number;
+}
+
+/** 意图评测集 */
+export interface IntentTestDataset {
+  id: string;
+  name: string;
+  description?: string;
+  /** 可选的意图类型列表 */
+  intentTypes: string[];
+  items: IntentTestItem[];
+  createdAt: number;
+  updatedAt: number;
 }

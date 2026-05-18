@@ -7,6 +7,7 @@ import type {
   QuestionBank,
   BatchTestTask,
   PromptCategoryConfig,
+  IntentTestTask,
 } from "../types";
 
 const KEY = "ai-console-persist-v2";
@@ -24,6 +25,7 @@ export interface PersistedBundle {
   promptCategories?: PromptCategoryConfig[];
   textModelId?: string;
   imageModelId?: string;
+  intentTestTasks?: IntentTestTask[];
 }
 
 export function loadBundle(): Partial<PersistedBundle> | null {
