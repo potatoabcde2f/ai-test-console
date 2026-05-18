@@ -1,5 +1,6 @@
 import type { ChatMessage, Evaluation, PromptTemplate } from "../types";
 import { ChatArea } from "../components/ChatArea";
+import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "../lib/models";
 
 interface Props {
   prompts: PromptTemplate[];
@@ -23,6 +24,11 @@ interface Props {
   // Memory
   memory: string;
   onMemory: (v: string) => void;
+  // Models
+  textModelId: string;
+  onTextModelChange: (id: string) => void;
+  imageModelId: string;
+  onImageModelChange: (id: string) => void;
 }
 
 const TAG_PRESETS = ["幻觉", "语气", "合规", "长度", "格式", "拒答", "多轮记忆"];
@@ -48,6 +54,10 @@ export function DialogueTestView({
   canSaveToLibrary,
   memory,
   onMemory,
+  textModelId,
+  onTextModelChange,
+  imageModelId,
+  onImageModelChange,
 }: Props) {
 
   return (
@@ -88,6 +98,38 @@ export function DialogueTestView({
             >
               {prompts.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 生文模型 */}
+          <div>
+            <label className="label">生文模型</label>
+            <select
+              className="select"
+              value={textModelId}
+              onChange={(e) => onTextModelChange(e.target.value)}
+              disabled={configLocked}
+              style={{ opacity: configLocked ? 0.55 : 1 }}
+            >
+              {MODEL_PRESETS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 生图模型 */}
+          <div>
+            <label className="label">生图模型</label>
+            <select
+              className="select"
+              value={imageModelId}
+              onChange={(e) => onImageModelChange(e.target.value)}
+              disabled={configLocked}
+              style={{ opacity: configLocked ? 0.55 : 1 }}
+            >
+              {IMAGE_GEN_MODELS.map((m) => (
+                <option key={m.id} value={m.id}>{m.label}</option>
               ))}
             </select>
           </div>

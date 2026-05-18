@@ -22,6 +22,8 @@ export interface PersistedBundle {
   questionBank?: QuestionBank;
   batchTestTasks?: BatchTestTask[];
   promptCategories?: PromptCategoryConfig[];
+  textModelId?: string;
+  imageModelId?: string;
 }
 
 export function loadBundle(): Partial<PersistedBundle> | null {

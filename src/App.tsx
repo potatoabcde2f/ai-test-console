@@ -23,7 +23,7 @@ import { ModelCompareView } from "./views/ModelCompareView";
 import { PromptCompareView } from "./views/PromptCompareView";
 import { QuestionBankView } from "./views/QuestionBankView";
 import { BatchTestView } from "./views/BatchTestView";
-import { MODEL_PRESETS } from "./lib/models";
+import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { mockAssistantReply } from "./lib/mockAI";
 import { uid } from "./lib/ids";
@@ -118,6 +118,9 @@ export function App() {
     return list[0]?.id ?? "";
   });
 
+  const [textModelId, setTextModelId] = useState(() => loadBundle()?.textModelId ?? MODEL_PRESETS[0]?.id ?? "");
+  const [imageModelId, setImageModelId] = useState(() => loadBundle()?.imageModelId ?? IMAGE_GEN_MODELS[0]?.id ?? "");
+
   const [userProfile, setUserProfile] = useState(() => loadBundle()?.userProfile ?? DEFAULT_USER_PROFILE);
   const [memory, setMemory] = useState(() => loadBundle()?.memory ?? "");
 
@@ -167,8 +170,10 @@ export function App() {
       questionBank,
       batchTestTasks,
       promptCategories,
+      textModelId,
+      imageModelId,
     });
-  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks, promptCategories]);
+  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks, promptCategories, textModelId, imageModelId]);
 
   const activePrompt = useMemo(
     () => prompts.find((p) => p.id === activePromptId) ?? prompts[0],
@@ -371,6 +376,10 @@ export function App() {
               canSaveToLibrary={canSaveToLibrary}
               memory={memory}
               onMemory={setMemory}
+              textModelId={textModelId}
+              onTextModelChange={setTextModelId}
+              imageModelId={imageModelId}
+              onImageModelChange={setImageModelId}
             />
           )}
           {nav === "images" && <ImageGenView records={images} />}
