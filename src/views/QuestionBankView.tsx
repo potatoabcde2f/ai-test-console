@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import type { QuestionBank, QuestionCategory, Question } from "../types";
 import { uid } from "../lib/ids";
+import * as XLSX from "xlsx";
 
 interface Props {
   questionBank: QuestionBank;
@@ -132,6 +133,126 @@ export function QuestionBankView({ questionBank, onChange }: Props) {
     });
   };
 
+  // 导出 Excel
+  const exportToExcel = () => {
+    if (bank.categories.length === 0) {
+      window.alert("问题库为空，无法导出");
+      return;
+    }
+
+    const data: { 分类: string; 问题: string }[] = [];
+    bank.categories.forEach((category) => {
+      if (category.questions.length === 0) {
+        data.push({ 分类: category.name, 问题: "" });
+      } else {
+        category.questions.forEach((q) => {
+          data.push({ 分类: category.name, 问题: q.content });
+        });
+      }
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "问题库");
+    XLSX.writeFile(wb, `问题库_${new Date().toLocaleDateString("zh-CN")}.xlsx`);
+  };
+
+  // 导入 Excel
+  const importFromExcel = (file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet) as { 分类?: string; 问题?: string }[];
+
+        if (jsonData.length === 0) {
+          window.alert("Excel 文件为空");
+          return;
+        }
+
+        // 按分类分组
+        const categoryMap = new Map<string, string[]>();
+        let importCount = 0;
+
+        jsonData.forEach((row) => {
+          const categoryName = row.分类?.trim() || "未分类";
+          const questionContent = row.问题?.trim();
+          if (questionContent) {
+            if (!categoryMap.has(categoryName)) {
+              categoryMap.set(categoryName, []);
+            }
+            categoryMap.get(categoryName)!.push(questionContent);
+            importCount++;
+          }
+        });
+
+        if (importCount === 0) {
+          window.alert("未找到有效的问题数据");
+          return;
+        }
+
+        // 确认导入
+        if (!window.confirm(`将从 Excel 导入 ${importCount} 个问题，是否继续？`)) {
+          return;
+        }
+
+        const newCategories: QuestionCategory[] = [];
+        categoryMap.forEach((questions, categoryName) => {
+          const existingCategory = bank.categories.find((c) => c.name === categoryName);
+          if (existingCategory) {
+            // 合并到现有分类
+            const newQuestions = questions.map((content) => ({
+              id: uid("q"),
+              content,
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            }));
+            const updatedCategory = {
+              ...existingCategory,
+              questions: [...existingCategory.questions, ...newQuestions],
+              updatedAt: Date.now(),
+            };
+            newCategories.push(updatedCategory);
+          } else {
+            // 创建新分类
+            const newCategory: QuestionCategory = {
+              id: uid("cat"),
+              name: categoryName,
+              questions: questions.map((content) => ({
+                id: uid("q"),
+                content,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              })),
+              createdAt: Date.now(),
+              updatedAt: Date.now(),
+            };
+            newCategories.push(newCategory);
+          }
+        });
+
+        // 合并现有分类和新分类
+        const existingCategoryNames = new Set(categoryMap.keys());
+        const unchangedCategories = bank.categories.filter((c) => !existingCategoryNames.has(c.name));
+        const newBank = {
+          ...bank,
+          categories: [...unchangedCategories, ...newCategories],
+        };
+        onChange(newBank);
+        window.alert(`成功导入 ${importCount} 个问题`);
+      } catch (error) {
+        console.error(error);
+        window.alert("导入失败，请检查文件格式");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
       {/* 顶部标题栏 */}
@@ -141,6 +262,31 @@ export function QuestionBankView({ questionBank, onChange }: Props) {
           <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
             管理问题分类，每个分类下可添加多条问题，用于批量对话测试
           </p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button type="button" className="btn" onClick={exportToExcel}>
+            📥 导出 Excel
+          </button>
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            📤 导入 Excel
+          </button>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) {
+                importFromExcel(file);
+                e.target.value = ""; // 重置以便可以重复选择同一文件
+              }
+            }}
+          />
         </div>
       </div>
 
