@@ -6,7 +6,6 @@ import type {
   QuestionBank,
   PromptTemplate,
 } from "../types";
-import { PROMPT_CATEGORY_LABELS } from "../types";
 import { MODEL_PRESETS } from "../lib/models";
 import { mockAssistantReply } from "../lib/mockAI";
 import { uid } from "../lib/ids";
@@ -404,7 +403,7 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
               <option value="">请选择...</option>
               {prompts.map((p) => (
                 <option key={p.id} value={p.id}>
-                  【{PROMPT_CATEGORY_LABELS[p.category]}】{p.name}
+                  {p.name}
                 </option>
               ))}
             </select>

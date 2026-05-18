@@ -1,8 +1,9 @@
 import { useState, useCallback } from "react";
-import type { PromptTemplate } from "../types";
+import type { PromptTemplate, PromptCategoryConfig } from "../types";
 
 interface Props {
   prompts: PromptTemplate[];
+  categories: PromptCategoryConfig[];
   activeId: string;
   onSelect: (id: string) => void;
   onChange: (patch: Partial<PromptTemplate> & { id: string }) => void;
@@ -23,6 +24,7 @@ function formatTime(ts: number): string {
 
 export function PromptPanel({
   prompts,
+  categories,
   activeId,
   onSelect,
   onChange,
@@ -31,6 +33,7 @@ export function PromptPanel({
   onNew,
 }: Props) {
   const p = prompts.find((x) => x.id === activeId);
+  const categoryName = categories.find((c) => c.id === p?.category)?.name ?? "";
 
   // 编辑弹窗状态
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -274,7 +277,14 @@ export function PromptPanel({
 
           {/* 内容预览 */}
           <div style={{ flex: 1, minHeight: 200, display: "flex", flexDirection: "column" }}>
-            <label className="label">System Prompt 预览</label>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <label className="label">System Prompt 预览</label>
+              {categoryName && (
+                <span className="chip" style={{ fontSize: "0.75rem" }}>
+                  {categoryName}
+                </span>
+              )}
+            </div>
             <div
               style={{
                 flex: 1,

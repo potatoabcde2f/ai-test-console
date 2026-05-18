@@ -17,23 +17,28 @@ export interface ModelPreset {
   description: string;
 }
 
+export interface PromptCategoryConfig {
+  id: string;
+  name: string;
+  desc: string;
+  createdAt: number;
+}
+
 export interface PromptTemplate {
   id: string;
   name: string;
   systemPrompt: string;
   updatedAt: number;
-  /** 提示词分类 */
-  category: "product" | "general" | "intent" | "image";
+  /** 提示词分类ID */
+  category: string;
 }
 
-export type PromptCategory = "product" | "general" | "intent" | "image";
-
-export const PROMPT_CATEGORY_LABELS: Record<PromptCategory, string> = {
-  product: "产品介绍提示词",
-  general: "通用提示词",
-  intent: "意图识别提示词",
-  image: "引导生图提示词",
-};
+export const DEFAULT_PROMPT_CATEGORIES: PromptCategoryConfig[] = [
+  { id: "product", name: "产品介绍提示词", desc: "用于产品介绍、商品推荐等场景", createdAt: Date.now() },
+  { id: "general", name: "通用提示词", desc: "通用对话、问答等基础场景", createdAt: Date.now() },
+  { id: "intent", name: "意图识别提示词", desc: "用于识别用户意图、分类等", createdAt: Date.now() },
+  { id: "image", name: "引导生图提示词", desc: "引导用户进行图像生成", createdAt: Date.now() },
+];
 
 export type Verdict = "pass" | "fail" | "pending";
 

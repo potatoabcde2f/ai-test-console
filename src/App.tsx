@@ -9,10 +9,11 @@ import type {
   NavKey,
   PromptTemplate,
   StoredConversation,
-  PromptCategory,
   QuestionBank,
   BatchTestTask,
+  PromptCategoryConfig,
 } from "./types";
+import { DEFAULT_PROMPT_CATEGORIES } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { DialogueTestView } from "./views/DialogueTestView";
 import { ImageGenView } from "./views/ImageGenView";
@@ -149,6 +150,11 @@ export function App() {
     return (b?.batchTestTasks as BatchTestTask[]) ?? [];
   });
 
+  const [promptCategories, setPromptCategories] = useState<PromptCategoryConfig[]>(() => {
+    const b = loadBundle();
+    return b?.promptCategories ?? [...DEFAULT_PROMPT_CATEGORIES];
+  });
+
   useEffect(() => {
     saveBundle({
       prompts,
@@ -160,8 +166,9 @@ export function App() {
       promptCompareTasks,
       questionBank,
       batchTestTasks,
+      promptCategories,
     });
-  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks]);
+  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks, promptCategories]);
 
   const activePrompt = useMemo(
     () => prompts.find((p) => p.id === activePromptId) ?? prompts[0],
@@ -181,17 +188,17 @@ export function App() {
     );
   }, []);
 
-  const newPrompt = useCallback((category?: PromptCategory) => {
+  const newPrompt = useCallback((category?: string) => {
     const p: PromptTemplate = {
       id: uid("pt"),
       name: "未命名模板",
       systemPrompt: "在此编写系统提示词…",
       updatedAt: Date.now(),
-      category: category ?? "general",
+      category: category ?? (promptCategories[0]?.id ?? "general"),
     };
     setPrompts((prev) => [...prev, p]);
     setActivePromptId(p.id);
-  }, []);
+  }, [promptCategories]);
 
   const duplicatePrompt = useCallback((id: string) => {
     setPrompts((prev) => {
@@ -370,12 +377,14 @@ export function App() {
           {nav === "prompts" && (
             <PromptStorageView
               prompts={prompts}
+              categories={promptCategories}
               activeId={activePrompt?.id ?? ""}
               onSelect={setActivePromptId}
               onChange={patchPrompt}
               onDuplicate={duplicatePrompt}
               onDelete={deletePrompt}
               onNew={newPrompt}
+              onChangeCategories={setPromptCategories}
             />
           )}
           {nav === "conversations" && (
