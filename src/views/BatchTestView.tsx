@@ -276,23 +276,38 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
       return;
     }
 
-    const modelStats: Record<string, { totalScore: number; scoredRounds: number; avgScore: number | null }> = {};
+    const modelStats: Record<string, { totalScore: number; scoredRounds: number; avgScore: number | null; winCount: number }> = {};
     task.modelIds.forEach((mid) => {
-      modelStats[mid] = { totalScore: 0, scoredRounds: 0, avgScore: null };
+      modelStats[mid] = { totalScore: 0, scoredRounds: 0, avgScore: null, winCount: 0 };
     });
 
     task.rounds.forEach((r) => {
+      // 统计每个模型的评分
       Object.entries(r.results).forEach(([mid, res]) => {
         if (res.score != null) {
           modelStats[mid].totalScore += res.score;
           modelStats[mid].scoredRounds++;
         }
       });
+      // 统计最优模型
+      if (r.bestModelId && modelStats[r.bestModelId]) {
+        modelStats[r.bestModelId].winCount++;
+      }
     });
 
     Object.values(modelStats).forEach((stat) => {
       if (stat.scoredRounds > 0) {
         stat.avgScore = Math.round((stat.totalScore / stat.scoredRounds) * 10) / 10;
+      }
+    });
+
+    // 找出胜出最多的模型
+    let bestModelId: string | null = null;
+    let maxWins = 0;
+    Object.entries(modelStats).forEach(([mid, stat]) => {
+      if (stat.winCount > maxWins) {
+        maxWins = stat.winCount;
+        bestModelId = mid;
       }
     });
 
@@ -305,6 +320,7 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
               summary: {
                 totalRounds: task.rounds.length,
                 modelStats,
+                bestModelId,
                 endedAt: Date.now(),
               },
             }
@@ -850,19 +866,25 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
                         borderColor: "rgba(37,99,235,0.25)",
                       }}
                     >
-                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
                         <div>
                           <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>总问题数</span>
                           <div style={{ fontWeight: 700 }}>{task.summary.totalRounds}</div>
                         </div>
-                        {Object.entries(task.summary.modelStats).map(([mid, s]) => (
-                          <div key={mid}>
-                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{getModelLabel(mid)}</span>
-                            <div style={{ fontWeight: 600 }}>
-                              均分{s.avgScore ?? "—"}
+                        {Object.entries(task.summary.modelStats).map(([mid, s]) => {
+                          const isWinner = task.summary?.bestModelId === mid;
+                          return (
+                            <div key={mid} style={{ position: "relative" }}>
+                              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{getModelLabel(mid)}</span>
+                              <div style={{ fontWeight: 600 }}>
+                                均分{s.avgScore ?? "—"} · 胜出<span style={{ color: isWinner ? "#16a34a" : "var(--text)", fontWeight: 700 }}>{s.winCount}</span>次
+                              </div>
+                              {isWinner && (
+                                <span style={{ fontSize: "0.7rem", color: "#16a34a", fontWeight: 600 }}>🏆 胜出最多</span>
+                              )}
                             </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                       <div style={{ fontSize: "0.72rem", color: "var(--text-muted)", marginTop: 8 }}>
                         结束时间：{new Date(task.summary.endedAt).toLocaleString("zh-CN")}

@@ -254,7 +254,10 @@ export interface BatchTestTask {
       totalScore: number;
       scoredRounds: number;
       avgScore: number | null;
+      winCount: number;
     }>;
+    /** 胜出最多的模型ID */
+    bestModelId: string | null;
     /** 结束时间 */
     endedAt: number;
   };
