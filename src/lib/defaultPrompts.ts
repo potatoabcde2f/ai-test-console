@@ -9,6 +9,7 @@ export const DEFAULT_PROMPTS: PromptTemplate[] = [
 若用户询问医疗/法律/投资，请提示「仅供参考，不构成专业意见」。
 禁止编造产品不存在的功能。`,
     updatedAt: Date.now(),
+    category: "general",
   },
   {
     id: uid("pt"),
@@ -16,5 +17,6 @@ export const DEFAULT_PROMPTS: PromptTemplate[] = [
     systemPrompt:
       "你会收到多轮对话。请始终记住：用户代号是「北极星」。最后一轮要复述该代号以通过测试。",
     updatedAt: Date.now(),
+    category: "general",
   },
 ];

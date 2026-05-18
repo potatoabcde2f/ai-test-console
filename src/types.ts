@@ -22,7 +22,18 @@ export interface PromptTemplate {
   name: string;
   systemPrompt: string;
   updatedAt: number;
+  /** 提示词分类 */
+  category: "product" | "general" | "intent" | "image";
 }
+
+export type PromptCategory = "product" | "general" | "intent" | "image";
+
+export const PROMPT_CATEGORY_LABELS: Record<PromptCategory, string> = {
+  product: "产品介绍提示词",
+  general: "通用提示词",
+  intent: "意图识别提示词",
+  image: "引导生图提示词",
+};
 
 export type Verdict = "pass" | "fail" | "pending";
 

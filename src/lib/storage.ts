@@ -11,6 +11,7 @@ const KEY = "ai-console-persist-v2";
 export interface PersistedBundle {
   prompts: PromptTemplate[];
   userProfile: string;
+  memory?: string;
   conversations: StoredConversation[];
   images: ImageGenRecord[];
   compareTasks: CompareTask[];

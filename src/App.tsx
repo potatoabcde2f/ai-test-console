@@ -9,6 +9,7 @@ import type {
   NavKey,
   PromptTemplate,
   StoredConversation,
+  PromptCategory,
 } from "./types";
 import { Sidebar } from "./components/Sidebar";
 import { DialogueTestView } from "./views/DialogueTestView";
@@ -113,6 +114,7 @@ export function App() {
   });
 
   const [userProfile, setUserProfile] = useState(() => loadBundle()?.userProfile ?? DEFAULT_USER_PROFILE);
+  const [memory, setMemory] = useState(() => loadBundle()?.memory ?? "");
 
   const [textModelId, setTextModelId] = useState(MODEL_PRESETS[0]!.id);
   const [imageModelId, setImageModelId] = useState(IMAGE_GEN_MODELS[0]!.id);
@@ -139,12 +141,13 @@ export function App() {
     saveBundle({
       prompts,
       userProfile,
+      memory,
       conversations,
       images,
       compareTasks,
       promptCompareTasks,
     });
-  }, [prompts, userProfile, conversations, images, compareTasks, promptCompareTasks]);
+  }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks]);
 
   const activePrompt = useMemo(
     () => prompts.find((p) => p.id === activePromptId) ?? prompts[0]!,
@@ -171,12 +174,13 @@ export function App() {
     );
   }, []);
 
-  const newPrompt = useCallback(() => {
+  const newPrompt = useCallback((category?: PromptCategory) => {
     const p: PromptTemplate = {
       id: uid("pt"),
       name: "未命名模板",
       systemPrompt: "在此编写系统提示词…",
       updatedAt: Date.now(),
+      category: category ?? "general",
     };
     setPrompts((prev) => [...prev, p]);
     setActivePromptId(p.id);
@@ -357,6 +361,8 @@ export function App() {
               onEvaluation={(p) => setEvaluation((e) => ({ ...e, ...p }))}
               onSaveToLibrary={saveToLibrary}
               canSaveToLibrary={canSaveToLibrary}
+              memory={memory}
+              onMemory={setMemory}
             />
           )}
           {nav === "images" && <ImageGenView records={images} />}
