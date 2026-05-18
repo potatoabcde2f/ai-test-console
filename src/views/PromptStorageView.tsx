@@ -36,6 +36,7 @@ export function PromptStorageView({
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryDesc, setNewCategoryDesc] = useState("");
+  const [autoEditPromptId, setAutoEditPromptId] = useState<string | null>(null);
 
   // 过滤当前分类的提示词
   const filteredPrompts = prompts.filter((p) => p.category === activeTab);
@@ -59,7 +60,23 @@ export function PromptStorageView({
   // 查看详情
   const handleViewDetail = (id: string) => {
     onSelect(id);
+    setAutoEditPromptId(null);
     setViewMode("detail");
+  };
+
+  // 新建提示词 - 创建后直接进入详情视图并打开编辑
+  const handleNewPrompt = () => {
+    const prevIds = new Set(prompts.map((p) => p.id));
+    onNew(activeTab);
+    // 找到新创建的提示词（ID 在之前不存在的）
+    setTimeout(() => {
+      const newPrompt = prompts.find((p) => !prevIds.has(p.id));
+      if (newPrompt) {
+        onSelect(newPrompt.id);
+        setAutoEditPromptId(newPrompt.id);
+        setViewMode("detail");
+      }
+    }, 0);
   };
 
   // 添加新分类
@@ -311,7 +328,7 @@ export function PromptStorageView({
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
           {/* 新建按钮 */}
           <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-primary" onClick={() => onNew(activeTab)}>
+            <button type="button" className="btn btn-primary" onClick={handleNewPrompt}>
               ＋ 新建{activeCategory?.name ?? "提示词"}
             </button>
           </div>
@@ -325,7 +342,7 @@ export function PromptStorageView({
                   type="button"
                   className="btn btn-primary"
                   style={{ marginTop: 12 }}
-                  onClick={() => onNew(activeTab)}
+                  onClick={handleNewPrompt}
                 >
                   创建第一个
                 </button>
@@ -388,11 +405,8 @@ export function PromptStorageView({
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
           {/* 返回按钮 */}
           <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="btn" onClick={() => setViewMode("list")}>
+            <button type="button" className="btn" onClick={() => { setAutoEditPromptId(null); setViewMode("list"); }}>
               ← 返回列表
-            </button>
-            <button type="button" className="btn btn-primary" onClick={() => onNew(activeTab)}>
-              ＋ 新建版本
             </button>
           </div>
 
@@ -412,7 +426,7 @@ export function PromptStorageView({
                     setViewMode("list");
                   }
                 }}
-                onNew={() => onNew(activeTab)}
+                autoEdit={autoEditPromptId === activeId}
               />
             ) : (
               <div className="panel" style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>

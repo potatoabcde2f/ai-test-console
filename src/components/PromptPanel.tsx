@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import type { PromptTemplate, PromptCategoryConfig } from "../types";
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
   onChange: (patch: Partial<PromptTemplate> & { id: string }) => void;
   onDuplicate: (id: string) => void;
   onDelete: (id: string) => void;
-  onNew: () => void;
+  autoEdit?: boolean;
 }
 
 function formatTime(ts: number): string {
@@ -30,7 +30,7 @@ export function PromptPanel({
   onChange,
   onDuplicate,
   onDelete,
-  onNew,
+  autoEdit = false,
 }: Props) {
   const p = prompts.find((x) => x.id === activeId);
   const categoryName = categories.find((c) => c.id === p?.category)?.name ?? "";
@@ -40,6 +40,16 @@ export function PromptPanel({
   const [editName, setEditName] = useState("");
   const [editSystemPrompt, setEditSystemPrompt] = useState("");
   const [hasChanges, setHasChanges] = useState(false);
+
+  // 自动打开编辑模式（新建时）
+  useEffect(() => {
+    if (autoEdit && p && !isEditModalOpen) {
+      setEditName(p.name);
+      setEditSystemPrompt(p.systemPrompt);
+      setHasChanges(false);
+      setIsEditModalOpen(true);
+    }
+  }, [autoEdit, p, isEditModalOpen]);
 
   // 右键菜单状态
   const [contextMenu, setContextMenu] = useState<{
@@ -160,9 +170,6 @@ export function PromptPanel({
       <div style={{ padding: "0.85rem 1rem", borderBottom: "1px solid var(--border)" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
           <span style={{ fontWeight: 700, fontSize: "0.9rem" }}>白盒 · 提示词</span>
-          <button type="button" className="btn btn-primary" onClick={onNew}>
-            ＋ 新建
-          </button>
         </div>
         <p style={{ margin: "0.5rem 0 0", fontSize: "0.75rem", color: "var(--text-muted)", lineHeight: 1.45 }}>
           切换模板即切换系统指令；编辑后需点击确认才生效。
