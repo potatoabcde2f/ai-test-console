@@ -877,7 +877,7 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank, prompts }: P
                             <div key={mid} style={{ position: "relative" }}>
                               <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{getModelLabel(mid)}</span>
                               <div style={{ fontWeight: 600 }}>
-                                均分{s.avgScore ?? "—"} · 胜出<span style={{ color: isWinner ? "#16a34a" : "var(--text)", fontWeight: 700 }}>{s.winCount}</span>次
+                                {s.avgScore != null ? `均分${s.avgScore} · ` : ""}胜出<span style={{ color: isWinner ? "#16a34a" : "var(--text)", fontWeight: 700 }}>{s.winCount}</span>次
                               </div>
                               {isWinner && (
                                 <span style={{ fontSize: "0.7rem", color: "#16a34a", fontWeight: 600 }}>🏆 胜出最多</span>
