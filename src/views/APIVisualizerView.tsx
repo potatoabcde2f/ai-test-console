@@ -52,7 +52,7 @@ export function APIVisualizerView() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [config, setConfig] = useState<APIConfig>({
-    baseUrl: "",
+    baseUrl: "http://192.168.15.62:8082", // 生产环境使用完整地址，开发时可留空使用代理
     chatSvc: "closet_gpt54mini",
     promptClosetChat: "",
     promptClosetChatSum: "",
@@ -426,13 +426,13 @@ export function APIVisualizerView() {
           <div className="config-grid">
             <div className="config-row">
               <label>
-                <span>Base URL (留空使用代理)</span>
+                <span>Base URL (留空使用 Vite 代理)</span>
                 <input
                   type="text"
                   className="input"
                   value={config.baseUrl}
                   onChange={(e) => setConfig((c) => ({ ...c, baseUrl: e.target.value }))}
-                  placeholder="留空表示使用 vite 代理"
+                  placeholder="http://192.168.15.62:8082"
                 />
               </label>
               <label>
