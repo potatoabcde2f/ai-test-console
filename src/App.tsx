@@ -26,6 +26,8 @@ import { PromptCompareView } from "./views/PromptCompareView";
 import { QuestionBankView } from "./views/QuestionBankView";
 import { BatchTestView } from "./views/BatchTestView";
 import { IntentTestView } from "./views/IntentTestView";
+import { APIVisualizerView } from "./views/APIVisualizerView";
+import { ImageUploadView } from "./views/ImageUploadView";
 import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { mockAssistantReply } from "./lib/mockAI";
@@ -190,10 +192,12 @@ export function App() {
     });
   }, [prompts, userProfile, memory, conversations, images, compareTasks, promptCompareTasks, questionBank, batchTestTasks, promptCategories, textModelId, imageModelId, intentTestTasks, intentTestDatasets]);
 
-  const activePrompt = useMemo(
-    () => prompts.find((p) => p.id === activePromptId) ?? prompts[0],
-    [prompts, activePromptId]
-  );
+  const activePrompt = useMemo(() => {
+    const found = prompts.find((p) => p.id === activePromptId);
+    if (found) return found;
+    if (prompts.length > 0) return prompts[0];
+    return null;
+  }, [prompts, activePromptId]);
 
   const configLocked = messages.length > 0;
   const configLockHint = configLocked
@@ -372,7 +376,7 @@ export function App() {
           {nav === "dialogue" && (
             <DialogueTestView
               prompts={prompts}
-              activePromptId={activePrompt.id}
+              activePromptId={activePrompt?.id ?? ""}
               onPromptChange={setActivePromptId}
               onOpenPromptLibrary={() => setNav("prompts")}
               userProfile={userProfile}
@@ -439,6 +443,8 @@ export function App() {
               prompts={prompts}
             />
           )}
+          {nav === "apiVisualizer" && <APIVisualizerView />}
+          {nav === "imageUpload" && <ImageUploadView />}
         </div>
       </main>
     </div>
