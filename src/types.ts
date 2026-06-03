@@ -162,9 +162,7 @@ export type NavKey =
   | "promptCompare"
   | "questionBank"
   | "batchTest"
-  | "intentTest"
-  | "apiVisualizer"
-  | "imageUpload";
+  | "intentTest";
 
 // 问题库相关类型
 export interface Question {

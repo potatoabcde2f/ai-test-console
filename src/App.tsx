@@ -26,8 +26,6 @@ import { PromptCompareView } from "./views/PromptCompareView";
 import { QuestionBankView } from "./views/QuestionBankView";
 import { BatchTestView } from "./views/BatchTestView";
 import { IntentTestView } from "./views/IntentTestView";
-import { APIVisualizerView } from "./views/APIVisualizerView";
-import { ImageUploadView } from "./views/ImageUploadView";
 import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { mockAssistantReply } from "./lib/mockAI";
@@ -443,12 +441,6 @@ export function App() {
               prompts={prompts}
             />
           )}
-          {nav === "apiVisualizer" && (
-            <APIVisualizerView
-              onSaveToConversations={(conv) => setConversations((prev) => [conv, ...prev])}
-            />
-          )}
-          {nav === "imageUpload" && <ImageUploadView />}
         </div>
       </main>
     </div>

@@ -211,34 +211,25 @@ export function DialogueTestView({
               })}
             </div>
 
-            {/* 分数 */}
+            {/* 分数 - 1-5 选择 */}
             <div>
-              <label className="label">分数（0–10，可选）</label>
-              <input
-                className="input"
-                type="number"
-                min={0}
-                max={10}
-                step={0.5}
-                placeholder="输入分数"
-                value={evaluation.score ?? ""}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  onEvaluation({ score: raw === "" ? null : Number(raw) });
-                }}
-              />
-            </div>
-
-            {/* 备注 */}
-            <div>
-              <label className="label">备注</label>
-              <textarea
-                className="textarea-field"
-                rows={2}
-                placeholder="评测备注..."
-                value={evaluation.notes}
-                onChange={(e) => onEvaluation({ notes: e.target.value })}
-              />
+              <label className="label">评分（1-5）</label>
+              <div style={{ display: "flex", gap: 6 }}>
+                {[1, 2, 3, 4, 5].map((score) => {
+                  const on = evaluation.score === score;
+                  return (
+                    <button
+                      key={score}
+                      type="button"
+                      className="btn"
+                      onClick={() => onEvaluation({ score })}
+                      style={on ? { borderColor: "#2563eb", color: "#2563eb", background: "#2563eb14" } : undefined}
+                    >
+                      {score}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* 优化点 */}
