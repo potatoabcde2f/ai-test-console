@@ -328,6 +328,10 @@ export function APIVisualizerView() {
     setMessages([]);
     setChatId("");
     setPendingImages([]);
+    // 重置文件输入框，确保可以重新上传相同文件
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   // 导出对话为 JSON
