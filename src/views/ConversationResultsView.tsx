@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { Evaluation, StoredConversation } from "../types";
-import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "../lib/models";
+import { MODEL_PRESETS } from "../lib/models";
 
 interface Props {
   conversations: StoredConversation[];
@@ -10,10 +10,6 @@ interface Props {
 
 function modelLabel(id: string) {
   return MODEL_PRESETS.find((m) => m.id === id)?.label ?? id;
-}
-
-function imageModelLabel(id: string) {
-  return IMAGE_GEN_MODELS.find((m) => m.id === id)?.label ?? id;
 }
 
 function verdictLabel(v: string) {
@@ -62,7 +58,7 @@ export function ConversationResultsView({ conversations, onUpdate, onDelete }: P
               <th>标题</th>
               <th>时间</th>
               <th>生文模型</th>
-              <th>生图模型</th>
+              <th>对话轮数</th>
               <th>提示词版本</th>
               <th>结论</th>
               <th>分数</th>
@@ -84,7 +80,7 @@ export function ConversationResultsView({ conversations, onUpdate, onDelete }: P
                     {new Date(c.createdAt).toLocaleString("zh-CN")}
                   </td>
                   <td>{modelLabel(c.modelId)}</td>
-                  <td>{imageModelLabel(c.imageModelId)}</td>
+                  <td>{Math.ceil(c.messages.length / 2)} 轮</td>
                   <td>{c.promptVersionName}</td>
                   <td>{verdictLabel(c.evaluation.verdict)}</td>
                   <td>{c.evaluation.score ?? "—"}</td>
@@ -114,7 +110,7 @@ export function ConversationResultsView({ conversations, onUpdate, onDelete }: P
             </div>
             <div className="modal-body scroll-y">
               <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 12 }}>
-                生文模型：{modelLabel(cur.modelId)} · 生图模型：{imageModelLabel(cur.imageModelId)} · 提示词：{cur.promptVersionName} · 消息数：{cur.messages.length}
+                生文模型：{modelLabel(cur.modelId)} · 对话轮数：{Math.ceil(cur.messages.length / 2)} 轮 · 提示词：{cur.promptVersionName} · 消息数：{cur.messages.length}
               </div>
               <div className="panel" style={{ padding: "0.75rem", marginBottom: 12, maxHeight: 220, overflow: "auto" }}>
                 <div className="label">System Prompt 快照</div>

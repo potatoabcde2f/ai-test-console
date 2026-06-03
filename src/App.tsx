@@ -137,6 +137,7 @@ export function App() {
   const addImageGenRecord = (record: ImageGenRecord) => {
     _setImages((prev: ImageGenRecord[]) => [record, ...prev]);
   };
+
   const [conversations, setConversations] = useState<StoredConversation[]>(() =>
     normalizeConversations(loadBundle()?.conversations)
   );
