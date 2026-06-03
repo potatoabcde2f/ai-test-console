@@ -437,13 +437,26 @@ export function APIVisualizerView() {
               </label>
               <label>
                 <span>chat_svc</span>
-                <input
-                  type="text"
-                  className="input"
+                <select
+                  className="input select"
                   value={config.chatSvc}
                   onChange={(e) => setConfig((c) => ({ ...c, chatSvc: e.target.value }))}
-                  placeholder="gpt-4.1"
-                />
+                >
+                  <option value="">默认模型</option>
+                  <option value="qwen">qwen</option>
+                  <option value="qwen-vl">qwen-vl</option>
+                  <option value="qwen-vl-closet">qwen-vl-closet</option>
+                  <option value="qwen-vl-calo">qwen-vl-calo</option>
+                  <option value="closet_gpt4o">closet_gpt4o</option>
+                  <option value="closet_gpt4omini">closet_gpt4omini</option>
+                  <option value="qwen-turbo">qwen-turbo</option>
+                  <option value="closet_gemini3flash">closet_gemini3flash</option>
+                  <option value="closet_gemini2.5flash">closet_gemini2.5flash</option>
+                  <option value="qwen-max">qwen-max</option>
+                  <option value="closet_gemini2.5flash_backup">closet_gemini2.5flash_backup</option>
+                  <option value="closet_gpt54mini">closet_gpt54mini</option>
+                  <option value="qwen3max">qwen3max</option>
+                </select>
               </label>
             </div>
             <div className="config-row">
