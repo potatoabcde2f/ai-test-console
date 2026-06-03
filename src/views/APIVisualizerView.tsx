@@ -607,6 +607,18 @@ export function APIVisualizerView() {
                     const df = metadata.debugFlow;
                     if (!Array.isArray(df) || df.length === 0) return null;
                     const flows = df as DebugFlowItem[];
+
+                    // 映射 closet_chat_detect 输出
+                    const mapDetectOutput = (output: string): string => {
+                      const map: Record<string, string> = {
+                        "1": "1: 生图需求",
+                        "2": "2: 通用穿搭问答",
+                        "3": "3: 产品介绍相关",
+                        "4": "4: 穿搭图片推荐",
+                      };
+                      return map[output] || output;
+                    };
+
                     return (
                       <details className="message-debug">
                         <summary>📋 Debug Flow ({flows.length} 个步骤)</summary>
@@ -619,7 +631,11 @@ export function APIVisualizerView() {
                                 {flow.chat_svc && <span className="debug-model">{flow.chat_svc}</span>}
                               </div>
                               <div className="debug-output">
-                                <pre>{flow.output || "(无输出)"}</pre>
+                                <pre>
+                                  {flow.template === "closet_chat_detect" && flow.output
+                                    ? mapDetectOutput(flow.output)
+                                    : flow.output || "(无输出)"}
+                                </pre>
                               </div>
                             </div>
                           ))}
