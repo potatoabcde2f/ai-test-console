@@ -132,6 +132,32 @@ export function ConversationResultsView({ conversations, onUpdate, onDelete }: P
                       {m.role} {m.modelId ? `· ${m.modelId}` : ""}
                     </span>
                     <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: "0.8rem", fontFamily: "var(--font-sans)" }}>{m.content}</pre>
+                    {/* 图片渲染 */}
+                    {m.images && m.images.length > 0 && (
+                      <div style={{ display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" }}>
+                        {m.images.map((img, idx) => (
+                          <div key={idx} style={{ position: "relative" }}>
+                            <img
+                              src={img.url}
+                              alt={`图片 ${idx + 1}`}
+                              style={{ maxWidth: 200, maxHeight: 150, borderRadius: 8, objectFit: "cover", border: "1px solid var(--border)" }}
+                            />
+                            <span style={{
+                              position: "absolute",
+                              top: 4,
+                              right: 4,
+                              background: "rgba(0,0,0,0.7)",
+                              color: "#fff",
+                              fontSize: "0.7rem",
+                              padding: "2px 6px",
+                              borderRadius: 4,
+                            }}>
+                              {img.type === "upload" ? "📤 上传" : "🤖 生成"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

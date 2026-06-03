@@ -133,6 +133,10 @@ export function App() {
   const [_dialogueSessionId, _setDialogueSessionId] = useState(() => uid("dlg"));
 
   const [images, _setImages] = useState<ImageGenRecord[]>(() => loadBundle()?.images ?? []);
+
+  const addImageGenRecord = (record: ImageGenRecord) => {
+    _setImages((prev: ImageGenRecord[]) => [record, ...prev]);
+  };
   const [conversations, setConversations] = useState<StoredConversation[]>(() =>
     normalizeConversations(loadBundle()?.conversations)
   );
@@ -269,6 +273,7 @@ export function App() {
           {nav === "dialogue" && (
             <DialogueTestView
               onSaveToConversations={(conv) => setConversations((prev) => [conv, ...prev])}
+              onSaveImageGen={addImageGenRecord}
             />
           )}
           {nav === "images" && <ImageGenView records={images} />}

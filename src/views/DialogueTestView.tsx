@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { StoredConversation } from "../types";
+import type { ImageGenRecord, StoredConversation } from "../types";
 import { uid } from "../lib/ids";
 
 interface DebugFlowItem {
@@ -22,9 +22,9 @@ interface Message {
   images?: MessageImage[];
   metadata?: {
     chatId?: string;
-    debugFlow?: unknown;
-    rawResponse?: unknown;
-    requestPayload?: unknown;
+    debugFlow?: DebugFlowItem[];
+    rawResponse?: { status: number; msg: string; data: unknown };
+    requestPayload?: Record<string, unknown>;
   };
 }
 
@@ -39,17 +39,20 @@ interface APIConfig {
   promptClosetChatProduct: string;
   promptImgExtractSystem: string;
   debug: string;
+  followUpPrompt: string;
 }
 
 interface APIVisualizerViewProps {
   onSaveToConversations?: (conv: StoredConversation) => void;
+  onSaveImageGen?: (record: ImageGenRecord) => void;
 }
 
-export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewProps) {
+export function DialogueTestView({ onSaveToConversations, onSaveImageGen }: APIVisualizerViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [chatId, setChatId] = useState<string>("");
+  const [showConfig, setShowConfig] = useState(false);
   const [pendingImages, setPendingImages] = useState<MessageImage[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -61,9 +64,42 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
   const [optimizations, setOptimizations] = useState("");
   const [tags, setTags] = useState<string[]>([]);
 
+  // 追问气泡状态
+  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
+
+  // Toast 状态
+  const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: "" });
+
   const TAG_PRESETS = ["幻觉", "语气", "合规", "长度", "格式", "拒答", "多轮记忆"];
 
-  const [config, setConfig] = useState<APIConfig>({
+const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
+
+根据下方提供的对话内容，模拟用户接下来最可能主动提出的 3 个穿搭问题。
+
+要求：
+- 每个问题字数控制在 10 字左右（5~13 字均可）
+- 以用户第一人称视角提问，语气真实自然，像用户自己在思考后脱口而出
+- 问题围绕穿搭主题展开，角度各有差异，涵盖以下维度中的不同方向：
+  · 场景延伸（这套能穿去约会 / 上班吗？）
+  · 单品挖掘（我有一条白裤子怎么搭？）
+  · 风格探索（怎么穿出法式 / 学院风？）
+  · 情绪需求（想显瘦 / 显高有什么技巧？）
+  · 实用痛点（衣橱有很多衣服却不知道怎么配）
+- 问题要具体、有画面感，避免宽泛提问
+- 每个问题的出发点不同，不能重复同一维度
+- 只输出 JSON，不要输出任何其他内容，不要加 markdown 代码块
+
+输出格式：
+{
+  "questions": [
+    { "id": 1, "text": "问题一" },
+    { "id": 2, "text": "问题二" },
+    { "id": 3, "text": "问题三" }
+  ]
+}
+
+对话内容：
+{{conversation}}`;  const [config, setConfig] = useState<APIConfig>({
     baseUrl: "http://192.168.15.62:8082",
     chatSvc: "closet_gpt54mini",
     promptClosetChat: "",
@@ -74,6 +110,7 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
     promptClosetChatProduct: "",
     promptImgExtractSystem: "",
     debug: "model_debug",
+    followUpPrompt: DEFAULT_FOLLOW_UP_PROMPT,
   });
 
   const scrollToBottom = () => {
@@ -85,6 +122,86 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
   }, [messages]);
 
   const generateId = () => `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+
+  // 生成追问问题
+  const generateFollowUpQuestions = useCallback(async (contextMessages: Message[]) => {
+    console.log("🔥 [追问生成] 函数被调用，消息数:", contextMessages.length);
+    if (contextMessages.length === 0) {
+      console.warn("🔥 [追问生成] 消息数为0，跳过");
+      return;
+    }
+    console.log("🔥 [追问生成] 开始生成追问...");
+
+    try {
+      // 构建对话上下文
+      const conversationContext = contextMessages
+        .map((msg) => `${msg.role === "user" ? "用户" : "AI"}: ${msg.content}`)
+        .join("\n\n");
+
+      const response = await fetch("/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer sk-530e813f50e071db5481f7f3ae89bd6a181fcaaea9822c203e644af8af80c630",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-6",
+          max_tokens: 500,
+          messages: [
+            {
+              role: "user",
+              content: config.followUpPrompt.replace("{{conversation}}", conversationContext)
+            }
+          ],
+        }),
+      });
+
+      console.log("🔥 [追问生成] API响应状态:", response.status);
+      const data = await response.json();
+      console.log("🔥 [追问生成] API响应数据:", JSON.stringify(data, null, 2));
+      
+      // 查找 content 数组中的 text 类型（跳过 thinking 类型）
+      let textContent = "";
+      if (data.content && Array.isArray(data.content)) {
+        const textItem = data.content.find((item: any) => item.type === "text" && item.text);
+        if (textItem) {
+          textContent = textItem.text;
+          console.log("🔥 [追问生成] 找到 text 内容:", textContent.substring(0, 100) + "...");
+        } else {
+          console.error("🔥 [追问生成] 未找到 text 类型的内容");
+        }
+      }
+      
+      if (textContent) {
+        try {
+          let text = textContent.trim();
+          console.log("🔥 [追问生成] 追问原始文本:", text);
+
+          // 去除 markdown 代码块标记
+          text = text.replace(/```json\s*/, "").replace(/```\s*$/, "").trim();
+          console.log("清理后文本:", text);
+
+          // 直接解析JSON
+          const parsed = JSON.parse(text);
+          console.log("解析的追问:", parsed);
+          if (parsed.questions && Array.isArray(parsed.questions)) {
+            // 提取 text 字段
+            const questionTexts = parsed.questions.map((q: { id?: number; text?: string }) => q.text || "").filter((t: string) => t.length > 0);
+            console.log("设置追问问题:", questionTexts);
+            setFollowUpQuestions(questionTexts.slice(0, 3));
+            console.log("🔥 [追问生成] 追问问题已设置:", questionTexts.slice(0, 3));
+            console.log("🔥 [追问生成] 调用 setFollowUpQuestions...");
+          }
+        } catch (e) {
+          console.error("解析追问问题失败:", e);
+          setFollowUpQuestions([]);
+        }
+      }
+    } catch (error) {
+      console.error("生成追问问题失败:", error);
+      setFollowUpQuestions([]);
+    }
+  }, []);
 
   const UPLOAD_API_URL = "/api/open/upload";
   const AI_STYLIST_API_URL = "/api/ai-stylist/send-message";
@@ -182,7 +299,7 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
       timestamp: Date.now(),
       images: currentImages.length > 0 ? currentImages : undefined,
       metadata: {
-        requestPayload: null, // 将在发送前填充
+        requestPayload: undefined,
       },
     };
 
@@ -294,7 +411,49 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
           },
         };
 
-        setMessages((prev) => [...prev, assistantMsg]);
+        // AI回复完成后生成追问（在setMessages外部调用，避免状态更新冲突）
+        const newMessagesForFollowUp = [...messages, assistantMsg];
+        
+        setMessages((prev) => {
+          const newMessages = [...prev, assistantMsg];
+          console.log("消息已更新，总数:");
+          return newMessages;
+        });
+        
+        // 在 setMessages 之后生成追问
+        setTimeout(() => {
+          console.log("准备生成追问，消息数:", newMessagesForFollowUp.length);
+          generateFollowUpQuestions(newMessagesForFollowUp);
+        }, 100);
+        if (onSaveImageGen) {
+          const debugFlow = (data.data.debug_flow || data.data.debugFlow) as DebugFlowItem[] | undefined;
+          if (debugFlow && Array.isArray(debugFlow)) {
+            // 1. 先检查是否为 "1: 生图需求" 分支
+            const detectStep = debugFlow.find((step) => step.template === "closet_chat_detect");
+            console.log("生图检测步骤:", detectStep);
+
+            // 只有当输出为 "1"（生图需求）时才记录
+            if (detectStep && detectStep.output === "1") {
+              // 2. 查找 closet_chat 节点获取提示词
+              const chatStep = debugFlow.find((step) => step.template === "closet_chat");
+              console.log("生图提示词步骤:", chatStep);
+
+              // 3. 查找是否有生成的图片
+              const generatedImage = assistantImages.find((img) => img.type === "generated");
+              console.log("生成的图片:", generatedImage);
+
+              const imageGenRecord: ImageGenRecord = {
+                id: generateId(),
+                imageModel: "gpt-image-1", // 默认模型
+                prompt: chatStep?.output || "",
+                createdAt: Date.now(),
+                previewUrl: generatedImage?.url || "",
+              };
+              console.log("保存生图记录:", imageGenRecord);
+              onSaveImageGen(imageGenRecord);
+            }
+          }
+        }
       } else {
         // 错误响应
         const errorMsg: Message = {
@@ -323,6 +482,7 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
     setMessages([]);
     setChatId("");
     setPendingImages([]);
+    setFollowUpQuestions([]);
     // 重置文件输入框，确保可以重新上传相同文件
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
@@ -332,6 +492,10 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
   // 保存到对话结果存储
   const saveToLibrary = () => {
     if (messages.length === 0 || !onSaveToConversations) return;
+    if (verdict === "pending") {
+      window.alert("请先选择「通过」或「不通过」后再保存。");
+      return;
+    }
 
     const title = window.prompt("对话标题（列表展示）", `API 对话 ${new Date().toLocaleString("zh-CN")}`);
     if (!title) return;
@@ -358,16 +522,17 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
       userProfileSnapshot: "",
       messages: chatMessages,
       evaluation: {
-        verdict: "pending",
-        score: null,
+        verdict,
+        score,
         notes: "",
-        optimizations: "",
-        tags: [],
+        optimizations,
+        tags,
       },
     };
 
     onSaveToConversations(conv);
-    window.alert("已保存到「对话结果存储」！");
+    setToast({ show: true, message: "已保存到「对话结果存储」！" });
+    setTimeout(() => setToast({ show: false, message: "" }), 1000);
   };
 
   // 导出对话为 JSON
@@ -415,18 +580,128 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
     }
   };
 
+  // 发送追问问题
+  const sendFollowUpQuestion = useCallback((question: string) => {
+    // 清空追问气泡
+    setFollowUpQuestions([]);
+    // 直接设置 input 并触发发送
+    setInput(question);
+    // 使用 requestAnimationFrame 确保状态更新
+    requestAnimationFrame(() => {
+      // 手动构造发送逻辑
+      const prompt = question;
+      if (!prompt || loading) return;
+
+      const userMsg: Message = {
+        id: generateId(),
+        role: "user",
+        content: prompt,
+        timestamp: Date.now(),
+        metadata: { requestPayload: undefined },
+      };
+
+      const newMessages = [...messages, userMsg];
+      setMessages(newMessages);
+      setInput("");
+      setLoading(true);
+
+      // 构造 payload 并发送
+      const payload: Record<string, unknown> = {
+        prompt,
+        chat_id: chatId || undefined,
+        chat_svc: config.chatSvc || undefined,
+      };
+
+      const promptParams: Record<string, string> = {};
+      if (config.promptClosetChat) promptParams.prompt_closet_chat = config.promptClosetChat;
+      if (config.promptClosetChatSum) promptParams.prompt_closet_chat_sum = config.promptClosetChatSum;
+      if (config.promptClosetChatImage) promptParams.prompt_closet_chat_image = config.promptClosetChatImage;
+      if (config.promptClosetTrendFilter) promptParams.prompt_closet_trend_filter = config.promptClosetTrendFilter;
+      if (config.promptClosetChatDetect) promptParams.prompt_closet_chat_detect = config.promptClosetChatDetect;
+      if (config.promptClosetChatProduct) promptParams.prompt_closet_chat_product = config.promptClosetChatProduct;
+      if (config.promptImgExtractSystem) promptParams.prompt_img_extract_system = config.promptImgExtractSystem;
+
+      if (Object.keys(promptParams).length > 0) {
+        payload.prompt_params = promptParams;
+      }
+      if (config.debug) payload.debug = config.debug;
+
+      // 调用 API
+      const apiUrl = config.baseUrl ? `${config.baseUrl}${AI_STYLIST_API_URL}` : AI_STYLIST_API_URL;
+      fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      })
+        .then(res => res.json())
+        .then(data => {
+          // 处理响应...
+          if (data.status === 1 && data.data) {
+            if (data.data.chat_id) {
+              setChatId(data.data.chat_id);
+            }
+            let content = "";
+            const assistantImages: MessageImage[] = [];
+            if (Array.isArray(data.data.message)) {
+              for (const msg of data.data.message) {
+                if (msg.type === "text") {
+                  content = msg.text || "";
+                } else if (msg.type === "image" && msg.url) {
+                  assistantImages.push({ url: msg.url, type: "generated" });
+                } else if (msg.type === "image_url" && msg.image?.url) {
+                  assistantImages.push({ url: msg.image.url, type: "generated" });
+                }
+              }
+            }
+            const assistantMsg: Message = {
+              id: generateId(),
+              role: "assistant",
+              content: content || (assistantImages.length > 0 ? "" : "（无回复内容）"),
+              timestamp: Date.now(),
+              images: assistantImages.length > 0 ? assistantImages : undefined,
+              metadata: {
+                chatId: data.data.chat_id,
+                debugFlow: (data.data.debug_flow || data.data.debugFlow) as DebugFlowItem[] | undefined,
+                rawResponse: { status: data.status, msg: data.msg, data: data.data },
+              },
+            };
+            setMessages((prev) => [...prev, assistantMsg]);
+            setTimeout(() => generateFollowUpQuestions([...newMessages, assistantMsg]), 100);
+          }
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error("发送失败:", err);
+          setLoading(false);
+        });
+    });
+  }, [messages, chatId, config, loading, AI_STYLIST_API_URL, generateFollowUpQuestions]);
+
   return (
     <div className="api-dialogue-view" style={{ display: "flex", flexDirection: "column" }}>
+      {/* Toast 提示 */}
+      {toast.show && (
+        <div className="toast-notification">
+          {toast.message}
+        </div>
+      )}
+
       {/* 头部 */}
       <div className="api-header-bar">
         <div className="api-title-section">
-          <h2>AI Stylist API 测试</h2>
+          <h2>AI Stylist 对话</h2>
           <p className="api-endpoint">
-            POST /api/ai-stylist/send-message
-            {chatId && <span className="chat-id-badge">Chat ID: {chatId}</span>}
+            {chatId ? `Chat ID: ${chatId}` : "新对话"}
           </p>
         </div>
         <div className="api-actions">
+          <button
+            type="button"
+            className={`btn ${showConfig ? "btn-primary" : "btn-ghost"}`}
+            onClick={() => setShowConfig(!showConfig)}
+          >
+            {showConfig ? "隐藏配置" : "显示配置"}
+          </button>
           <button
             type="button"
             className="btn btn-secondary"
@@ -436,150 +711,164 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
           >
             ⬇️ 导出对话
           </button>
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={saveToLibrary}
-            disabled={messages.length === 0 || !onSaveToConversations}
-            title={messages.length === 0 ? "没有可保存的对话" : "保存到对话结果存储"}
-          >
-            💾 保存到对话库
-          </button>
           <button type="button" className="btn btn-danger" onClick={clearChat}>
             清空对话
           </button>
         </div>
       </div>
 
-      {/* 三栏主体 */}
-      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "320px 1fr 280px", gap: 12, minHeight: 0, overflow: "hidden" }}>
-        {/* 左侧：配置区 */}
-        <div className="panel scroll-y" style={{ padding: "0.85rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <div style={{ fontWeight: 600, fontSize: "0.9rem", paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
-            ⚙️ 配置区
-          </div>
+      {/* 配置侧边栏遮罩 */}
+      {showConfig && (
+        <div className="api-config-overlay" onClick={() => setShowConfig(false)} />
+      )}
 
-          {/* Base URL */}
-          <div>
-            <label className="label">Base URL</label>
-            <input
-              type="text"
-              className="input"
-              value={config.baseUrl}
-              onChange={(e) => setConfig((c) => ({ ...c, baseUrl: e.target.value }))}
-              placeholder="http://192.168.15.62:8082"
-            />
+      {/* 配置侧边栏 */}
+      {showConfig && (
+        <div className="api-config-panel">
+          <div className="config-header">
+            <h3>⚙️ 接口配置</h3>
+            <button type="button" className="config-close-btn" onClick={() => setShowConfig(false)}>
+              ✕
+            </button>
           </div>
-
-          {/* chat_svc */}
-          <div>
-            <label className="label">chat_svc</label>
-            <select
-              className="input select"
-              value={config.chatSvc}
-              onChange={(e) => setConfig((c) => ({ ...c, chatSvc: e.target.value }))}
-            >
-              <option value="">默认模型</option>
-              <option value="qwen">qwen</option>
-              <option value="qwen-vl">qwen-vl</option>
-              <option value="qwen-vl-closet">qwen-vl-closet</option>
-              <option value="qwen-vl-calo">qwen-vl-calo</option>
-              <option value="closet_gpt4o">closet_gpt4o</option>
-              <option value="closet_gpt4omini">closet_gpt4omini</option>
-              <option value="qwen-turbo">qwen-turbo</option>
-              <option value="closet_gemini3flash">closet_gemini3flash</option>
-              <option value="closet_gemini2.5flash">closet_gemini2.5flash</option>
-              <option value="qwen-max">qwen-max</option>
-              <option value="closet_gemini2.5flash_backup">closet_gemini2.5flash_backup</option>
-              <option value="closet_gpt54mini">closet_gpt54mini</option>
-              <option value="qwen3max">qwen3max</option>
-            </select>
-          </div>
-
-          {/* prompt_params */}
-          <div>
-            <label className="label">prompt_closet_chat</label>
-            <input
-              type="text"
-              className="input"
-              value={config.promptClosetChat}
-              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChat: e.target.value }))}
-              placeholder="自定义 chat prompt"
-            />
-          </div>
-          <div>
-            <label className="label">prompt_closet_chat_sum</label>
-            <input
-              type="text"
-              className="input"
-              value={config.promptClosetChatSum}
-              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatSum: e.target.value }))}
-              placeholder="自定义 summary prompt"
-            />
-          </div>
-          <div>
-            <label className="label">prompt_closet_chat_image</label>
-            <input
-              type="text"
-              className="input"
-              value={config.promptClosetChatImage}
-              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatImage: e.target.value }))}
-              placeholder="自定义 image prompt"
-            />
-          </div>
-          <div>
-            <label className="label">prompt_closet_trend_filter</label>
-            <input
-              type="text"
-              className="input"
-              value={config.promptClosetTrendFilter}
-              onChange={(e) => setConfig((c) => ({ ...c, promptClosetTrendFilter: e.target.value }))}
-              placeholder="自定义 trend filter"
-            />
-          </div>
-          <div>
-            <label className="label">prompt_closet_chat_detect</label>
-            <input
-              type="text"
-              className="input"
-              value={config.promptClosetChatDetect}
-              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatDetect: e.target.value }))}
-              placeholder="自定义 detect prompt"
-            />
-          </div>
-          <div>
-            <label className="label">prompt_closet_chat_product</label>
-            <input
-              type="text"
-              className="input"
-              value={config.promptClosetChatProduct}
-              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatProduct: e.target.value }))}
-              placeholder="自定义 product prompt"
-            />
-          </div>
-          <div>
-            <label className="label">prompt_img_extract_system</label>
-            <input
-              type="text"
-              className="input"
-              value={config.promptImgExtractSystem}
-              onChange={(e) => setConfig((c) => ({ ...c, promptImgExtractSystem: e.target.value }))}
-              placeholder="自定义 img extract system prompt"
-            />
-          </div>
-          <div>
-            <label className="label">debug</label>
-            <input
-              type="text"
-              className="input"
-              value={config.debug}
-              onChange={(e) => setConfig((c) => ({ ...c, debug: e.target.value }))}
-              placeholder="model_debug"
-            />
+          <div className="config-grid" style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            <div>
+              <label className="label">Base URL (留空使用 Vite 代理)</label>
+              <input
+                type="text"
+                className="input"
+                value={config.baseUrl}
+                onChange={(e) => setConfig((c) => ({ ...c, baseUrl: e.target.value }))}
+                placeholder="http://192.168.15.62:8082"
+              />
+            </div>
+            <div>
+              <label className="label">chat_svc</label>
+              <select
+                className="input select"
+                value={config.chatSvc}
+                onChange={(e) => setConfig((c) => ({ ...c, chatSvc: e.target.value }))}
+              >
+                <option value="">默认模型</option>
+                {/* Qwen */}
+                <option value="qwen">qwen</option>
+                <option value="qwen-vl">qwen-vl</option>
+                <option value="qwen-vl-closet">qwen-vl-closet</option>
+                <option value="qwen-vl-calo">qwen-vl-calo</option>
+                <option value="qwen-turbo">qwen-turbo</option>
+                <option value="qwen-max">qwen-max</option>
+                <option value="qwen3max">qwen3max</option>
+                {/* GPT */}
+                <option value="closet_gpt4o">closet_gpt4o</option>
+                <option value="closet_gpt4omini">closet_gpt4omini</option>
+                <option value="closet_gpt54mini">closet_gpt54mini</option>
+                <option value="closet_gpt51">closet_gpt51</option>
+                {/* Gemini */}
+                <option value="gemini3.1flash-lite">gemini3.1flash-lite</option>
+                <option value="gemini3.1pro">gemini3.1pro</option>
+              </select>
+            </div>
+            <div>
+              <label className="label">debug</label>
+              <input
+                type="text"
+                className="input"
+                value={config.debug}
+                onChange={(e) => setConfig((c) => ({ ...c, debug: e.target.value }))}
+                placeholder="model_debug"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_chat</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetChat}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChat: e.target.value }))}
+                placeholder="自定义 chat prompt"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_chat_sum</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetChatSum}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatSum: e.target.value }))}
+                placeholder="自定义 summary prompt"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_chat_image</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetChatImage}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatImage: e.target.value }))}
+                placeholder="自定义 image prompt"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_trend_filter</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetTrendFilter}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetTrendFilter: e.target.value }))}
+                placeholder="自定义 trend filter"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_chat_detect</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetChatDetect}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatDetect: e.target.value }))}
+                placeholder="自定义 detect prompt"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_chat_product</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetChatProduct}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatProduct: e.target.value }))}
+                placeholder="自定义 product prompt"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_img_extract_system</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptImgExtractSystem}
+                onChange={(e) => setConfig((c) => ({ ...c, promptImgExtractSystem: e.target.value }))}
+                placeholder="自定义 img extract system prompt"
+              />
+            </div>
+            <div style={{ gridColumn: "span 2" }}>
+              <label className="label">追问提示词 (followUpPrompt)</label>
+              <textarea
+                className="input"
+                rows={8}
+                value={config.followUpPrompt}
+                onChange={(e) => setConfig((c) => ({ ...c, followUpPrompt: e.target.value }))}
+                placeholder="自定义追问提示词，使用 {{conversation}} 作为对话内容占位符"
+                style={{ fontFamily: "var(--font-mono)", fontSize: "0.75rem", resize: "vertical" }}
+              />
+              <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                提示：使用 {"{{"}conversation{"}}"} 作为对话内容占位符
+              </p>
+            </div>
           </div>
         </div>
+      )}
 
-        {/* 中间：对话区 */}
+      {/* 两栏主体：对话 + 评测 */}
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, minHeight: 0, overflow: "hidden" }}>
+        {/* 左侧：对话区 */}
         <div style={{ display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
           {/* 对话消息 */}
           <div className="api-messages-area" style={{ flex: 1 }}>
@@ -624,6 +913,49 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
                           ))}
                         </div>
                       )}
+                      {/* 请求 JSON - 仅用户消息 */}
+                      {msg.role === "user" && msg.metadata?.requestPayload && (
+                        <details className="message-debug request-payload">
+                          <summary>{"📤 请求 JSON"}</summary>
+                          <pre>{String(JSON.stringify(msg.metadata.requestPayload, null, 2))}</pre>
+                        </details>
+                      )}
+                      {/* 响应数据 - 仅 AI 消息 */}
+                      {msg.role === "assistant" && msg.metadata?.rawResponse && (
+                        <details className="message-debug raw-response">
+                          <summary>{"📄 响应数据"}</summary>
+                          <pre>{String(JSON.stringify(msg.metadata.rawResponse, null, 2))}</pre>
+                        </details>
+                      )}
+                      {/* Debug Flow */}
+                      {msg.role === "assistant" && msg.metadata?.debugFlow && Array.isArray(msg.metadata.debugFlow) && msg.metadata.debugFlow.length > 0 && (
+                        <details className="message-debug">
+                          <summary>{`📋 Debug Flow (${msg.metadata.debugFlow.length} 个步骤)`}</summary>
+                          <div className="debug-flow-list">
+                            {(msg.metadata.debugFlow as DebugFlowItem[]).map((flow, idx) => (
+                              <div key={idx} className="debug-flow-item">
+                                <div className="debug-flow-header">
+                                  <span className="debug-step-num">步骤 {idx + 1}</span>
+                                  <span className="debug-template">{flow.template || "unknown"}</span>
+                                  {flow.chat_svc && <span className="debug-model">{flow.chat_svc}</span>}
+                                </div>
+                                <div className="debug-output">
+                                  <pre>
+                                    {String(flow.template === "closet_chat_detect" && flow.output
+                                      ? ({
+                                          "1": "1: 生图需求",
+                                          "2": "2: 通用穿搭问答",
+                                          "3": "3: 产品介绍相关",
+                                          "4": "4: 穿搭图片推荐",
+                                        }[flow.output] || flow.output)
+                                      : flow.output || "(无输出)")}
+                                  </pre>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -638,11 +970,29 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
                   </div>
                 )}
                 <div ref={messagesEndRef} />
+
+                {/* 追问气泡 */}
+                {followUpQuestions.length > 0 && !loading && (
+                  <div className="follow-up-bubbles">
+                    <div className="follow-up-label">💡 你可能还想问：</div>
+                    <div className="follow-up-questions">
+                      {followUpQuestions.map((question, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          className="follow-up-chip"
+                          onClick={() => sendFollowUpQuestion(question)}
+                          disabled={loading}
+                        >
+                          {question}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
-
-          {/* 输入区 */}
           <div className="api-input-area">
             {pendingImages.length > 0 && (
               <div className="pending-images">
@@ -673,9 +1023,8 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
                 rows={3}
               />
               <div className="api-input-actions">
-                <button type="button" className="upload-btn-with-text" onClick={() => fileInputRef.current?.click()}>
-                  <span className="upload-icon">📎</span>
-                  <span className="upload-label">上传图片</span>
+                <button type="button" className="btn btn-secondary" onClick={() => fileInputRef.current?.click()}>
+                  📷 上传图片
                 </button>
                 <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => handleFileUpload(e.target.files)} />
                 <button type="button" className="api-send-btn" onClick={sendMessage} disabled={loading || (!input.trim() && pendingImages.length === 0)}>
@@ -692,18 +1041,17 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
             📊 评测区
           </div>
 
-          {/* 结论 */}
+          {/* 结论 - 必选 */}
           <div>
             <label className="label" style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ color: "#dc2626", fontWeight: "bold" }}>*</span>
-              结论
+              结论（必选）
             </label>
             <div style={{ display: "flex", gap: 6 }}>
               {(
                 [
-                  ["pass", "通过", "#16a34a"],
-                  ["fail", "不通过", "#dc2626"],
-                  ["pending", "待定", "#64748b"],
+                  ["pass", "✓ 通过", "#16a34a"],
+                  ["fail", "✗ 不通过", "#dc2626"],
                 ] as const
               ).map(([v, label, c]) => {
                 const on = verdict === v;
@@ -780,6 +1128,31 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
                 );
               })}
             </div>
+          </div>
+
+          {/* 保存按钮 */}
+          <div style={{ marginTop: "auto", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
+            <button
+              type="button"
+              className="btn btn-primary"
+              style={{ width: "100%" }}
+              onClick={saveToLibrary}
+              disabled={messages.length === 0 || !onSaveToConversations || verdict === "pending"}
+              title={
+                messages.length === 0
+                  ? "没有可保存的对话"
+                  : verdict === "pending"
+                  ? "请先选择通过或不通过"
+                  : "保存到对话结果存储"
+              }
+            >
+              💾 保存到对话库
+            </button>
+            {verdict === "pending" && messages.length > 0 && (
+              <p style={{ fontSize: "0.7rem", color: "#dc2626", marginTop: 4, textAlign: "center" }}>
+                请先选择通过或不通过
+              </p>
+            )}
           </div>
         </div>
       </div>

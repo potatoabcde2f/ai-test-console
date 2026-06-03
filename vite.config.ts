@@ -18,6 +18,11 @@ export default defineConfig({
         target: "http://192.168.15.62:8082",
         changeOrigin: true,
       },
+      // 代理追问 API 请求
+      "/v1/messages": {
+        target: "http://47.236.3.167:8080",
+        changeOrigin: true,
+      },
     },
   },
 });
