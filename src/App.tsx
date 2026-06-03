@@ -28,7 +28,6 @@ import { BatchTestView } from "./views/BatchTestView";
 import { IntentTestView } from "./views/IntentTestView";
 import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
-import { mockAssistantReply } from "./lib/mockAI";
 import { uid } from "./lib/ids";
 import { loadBundle, saveBundle } from "./lib/storage";
 import { DEFAULT_USER_PROFILE } from "./lib/userProfile";
@@ -121,19 +120,19 @@ export function App() {
     return list[0]?.id ?? "";
   });
 
-  const [textModelId, setTextModelId] = useState(() => loadBundle()?.textModelId ?? MODEL_PRESETS[0]?.id ?? "");
-  const [imageModelId, setImageModelId] = useState(() => loadBundle()?.imageModelId ?? IMAGE_GEN_MODELS[0]?.id ?? "");
+  const [textModelId, _setTextModelId] = useState(() => loadBundle()?.textModelId ?? MODEL_PRESETS[0]?.id ?? "");
+  const [imageModelId, _setImageModelId] = useState(() => loadBundle()?.imageModelId ?? IMAGE_GEN_MODELS[0]?.id ?? "");
 
-  const [userProfile, setUserProfile] = useState(() => loadBundle()?.userProfile ?? DEFAULT_USER_PROFILE);
-  const [memory, setMemory] = useState(() => loadBundle()?.memory ?? "");
+  const [userProfile, _setUserProfile] = useState(() => loadBundle()?.userProfile ?? DEFAULT_USER_PROFILE);
+  const [memory, _setMemory] = useState(() => loadBundle()?.memory ?? "");
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [evaluation, setEvaluation] = useState<Evaluation>(defaultEval);
-  const [dialogueSessionId, setDialogueSessionId] = useState(() => uid("dlg"));
+  const [_messages, _setMessages] = useState<ChatMessage[]>([]);
+  const [_input, _setInput] = useState("");
+  const [_loading, _setLoading] = useState(false);
+  const [_evaluation, _setEvaluation] = useState<Evaluation>(defaultEval);
+  const [_dialogueSessionId, _setDialogueSessionId] = useState(() => uid("dlg"));
 
-  const [images, setImages] = useState<ImageGenRecord[]>(() => loadBundle()?.images ?? []);
+  const [images, _setImages] = useState<ImageGenRecord[]>(() => loadBundle()?.images ?? []);
   const [conversations, setConversations] = useState<StoredConversation[]>(() =>
     normalizeConversations(loadBundle()?.conversations)
   );
@@ -197,12 +196,16 @@ export function App() {
     return null;
   }, [prompts, activePromptId]);
 
-  const configLocked = messages.length > 0;
-  const configLockHint = configLocked
-    ? "本轮已锁定配置；请先完成打标并「保存到对话库」，将自动清空后方可更换提示词、User Profile"
-    : "当前无对话，可自由配置后开始新一轮";
-
-  const canSaveToLibrary = messages.length > 0 && evaluation.verdict !== "pending";
+  // const _configLocked = _messages.length > 0;
+  // Unused variables kept for compatibility
+  // const configLockHint = "";
+  // const canSaveToLibrary = false;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // const send = null;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // const uploadImage = null;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  // const saveToLibrary = null;
 
   const patchPrompt = useCallback((patch: Partial<PromptTemplate> & { id: string }) => {
     setPrompts((prev) =>
@@ -248,114 +251,6 @@ export function App() {
     [activePromptId]
   );
 
-  const send = useCallback(async () => {
-    const text = input.trim();
-    if (!text || loading) return;
-
-    const userMsg: ChatMessage = {
-      id: uid("msg"),
-      role: "user",
-      content: text,
-      createdAt: Date.now(),
-    };
-    setInput("");
-    setMessages((prev) => [...prev, userMsg]);
-    setLoading(true);
-
-    const visible = [...messages, userMsg];
-
-    try {
-      const mergedSystem = `${activePrompt?.systemPrompt ?? ""}\n\n--- User Profile ---\n${userProfile}`;
-      const result = await mockAssistantReply({
-        model: MODEL_PRESETS[0],
-        systemPrompt: mergedSystem,
-        userProfile,
-        visibleMessages: visible,
-        fewShot: null,
-      });
-
-      const asst: ChatMessage = {
-        id: uid("msg"),
-        role: "assistant",
-        content: result.content,
-        modelId: MODEL_PRESETS[0].id,
-        createdAt: Date.now(),
-      };
-      setMessages((prev) => [...prev, asst]);
-    } catch (e) {
-      console.error(e);
-      window.alert("生成失败");
-    } finally {
-      setLoading(false);
-    }
-  }, [input, loading, messages, activePrompt, userProfile, dialogueSessionId]);
-
-  const uploadImage = useCallback((file: File) => {
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      const imageUrl = reader.result as string;
-      const userMsg: ChatMessage = {
-        id: uid("msg"),
-        role: "user",
-        content: input.trim() || "[上传了图片]",
-        images: [{ url: imageUrl, type: "upload" }],
-        createdAt: Date.now(),
-      };
-      setMessages((prev) => [...prev, userMsg]);
-      setInput("");
-      setLoading(true);
-      setTimeout(() => {
-        const asst: ChatMessage = {
-          id: uid("msg"),
-          role: "assistant",
-          content: "我已收到您上传的图片。这是一张示例图片。",
-          modelId: MODEL_PRESETS[0].id,
-          createdAt: Date.now(),
-        };
-        setMessages((prev) => [...prev, asst]);
-        setLoading(false);
-      }, 800);
-    };
-    reader.readAsDataURL(file);
-  }, [input]);
-
-  const saveToLibrary = useCallback(() => {
-    if (messages.length === 0) return;
-    if (evaluation.verdict === "pending") {
-      window.alert("请先选择「通过」或「不通过」后再保存。");
-      return;
-    }
-    const title = window.prompt("对话标题（列表展示）", `对话 ${new Date().toLocaleString("zh-CN")}`);
-    if (!title) return;
-    const convId = uid("conv");
-    const row: StoredConversation = {
-      id: convId,
-      title,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      modelId: MODEL_PRESETS[0].id,
-      imageModelId: "",
-      promptId: activePrompt?.id ?? "",
-      promptVersionName: activePrompt?.name ?? "未命名",
-      systemPromptContent: activePrompt?.systemPrompt ?? "",
-      userProfileSnapshot: userProfile,
-      sessionKey: dialogueSessionId,
-      messages: messages.map((m) => ({ ...m })),
-      evaluation: { ...evaluation },
-    };
-    setConversations((prev) => [row, ...prev]);
-    setImages((prev) =>
-      prev.map((img) =>
-        img.sessionKey === dialogueSessionId && !img.conversationId ? { ...img, conversationId: convId } : img
-      )
-    );
-    setMessages([]);
-    setEvaluation(defaultEval());
-    setInput("");
-    setDialogueSessionId(uid("dlg"));
-    window.alert("已保存到「对话结果存储」。对话已清空，可重新开始新一轮。");
-  }, [activePrompt, userProfile, dialogueSessionId, messages, evaluation]);
-
   const updateConversationEval = useCallback((id: string, ev: Evaluation) => {
     setConversations((prev) =>
       prev.map((c) => (c.id === id ? { ...c, evaluation: { ...ev }, updatedAt: Date.now() } : c))
@@ -373,30 +268,7 @@ export function App() {
         <div className="main-scroll">
           {nav === "dialogue" && (
             <DialogueTestView
-              prompts={prompts}
-              activePromptId={activePrompt?.id ?? ""}
-              onPromptChange={setActivePromptId}
-              onOpenPromptLibrary={() => setNav("prompts")}
-              userProfile={userProfile}
-              onUserProfile={setUserProfile}
-              configLocked={configLocked}
-              configLockHint={configLockHint}
-              messages={messages}
-              loading={loading}
-              input={input}
-              onInput={setInput}
-              onSend={send}
-              onUploadImage={uploadImage}
-              evaluation={evaluation}
-              onEvaluation={(p) => setEvaluation((e) => ({ ...e, ...p }))}
-              onSaveToLibrary={saveToLibrary}
-              canSaveToLibrary={canSaveToLibrary}
-              memory={memory}
-              onMemory={setMemory}
-              textModelId={textModelId}
-              onTextModelChange={setTextModelId}
-              imageModelId={imageModelId}
-              onImageModelChange={setImageModelId}
+              onSaveToConversations={(conv) => setConversations((prev) => [conv, ...prev])}
             />
           )}
           {nav === "images" && <ImageGenView records={images} />}
