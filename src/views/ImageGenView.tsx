@@ -39,8 +39,8 @@ export function ImageGenView({ records }: Props) {
             ) : (
               records.map((r) => (
                 <tr key={r.id}>
-                  <td style={{ width: 88 }}>
-                    <img src={r.previewUrl} alt="" width={72} height={72} style={{ borderRadius: 8, objectFit: "cover", border: "1px solid var(--border)" }} />
+                  <td style={{ width: 120 }}>
+                    <img src={r.previewUrl} alt="" style={{ width: 100, height: 100, borderRadius: 8, objectFit: "contain", border: "1px solid var(--border)" }} />
                   </td>
                   <td>
                     <code style={{ fontSize: "0.75rem" }}>{r.id}</code>
