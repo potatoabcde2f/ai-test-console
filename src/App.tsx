@@ -138,6 +138,18 @@ export function App() {
     _setImages((prev: ImageGenRecord[]) => [record, ...prev]);
   };
 
+  // 对话状态 - 提升到 App 层级，切换 tab 不清空
+  const [dialogueMessages, setDialogueMessages] = useState<any[]>([]);
+  const [dialogueChatId, setDialogueChatId] = useState<string>("");
+  const [dialogueInput, setDialogueInput] = useState("");
+  const [dialogueLoading, setDialogueLoading] = useState(false);
+  const [dialoguePendingImages, setDialoguePendingImages] = useState<any[]>([]);
+  const [dialogueFollowUpQuestions, setDialogueFollowUpQuestions] = useState<string[]>([]);
+  const [dialogueVerdict, setDialogueVerdict] = useState<"pass" | "fail" | "pending">("pending");
+  const [dialogueScore, setDialogueScore] = useState<number | null>(null);
+  const [dialogueOptimizations, setDialogueOptimizations] = useState("");
+  const [dialogueTags, setDialogueTags] = useState<string[]>([]);
+
   const [conversations, setConversations] = useState<StoredConversation[]>(() =>
     normalizeConversations(loadBundle()?.conversations)
   );
@@ -275,6 +287,26 @@ export function App() {
             <DialogueTestView
               onSaveToConversations={(conv) => setConversations((prev) => [conv, ...prev])}
               onSaveImageGen={addImageGenRecord}
+              externalMessages={dialogueMessages}
+              setExternalMessages={setDialogueMessages}
+              externalChatId={dialogueChatId}
+              setExternalChatId={setDialogueChatId}
+              externalInput={dialogueInput}
+              setExternalInput={setDialogueInput}
+              externalLoading={dialogueLoading}
+              setExternalLoading={setDialogueLoading}
+              externalPendingImages={dialoguePendingImages}
+              setExternalPendingImages={setDialoguePendingImages}
+              externalFollowUpQuestions={dialogueFollowUpQuestions}
+              setExternalFollowUpQuestions={setDialogueFollowUpQuestions}
+              externalVerdict={dialogueVerdict}
+              setExternalVerdict={setDialogueVerdict}
+              externalScore={dialogueScore}
+              setExternalScore={setDialogueScore}
+              externalOptimizations={dialogueOptimizations}
+              setExternalOptimizations={setDialogueOptimizations}
+              externalTags={dialogueTags}
+              setExternalTags={setDialogueTags}
             />
           )}
           {nav === "images" && <ImageGenView records={images} />}

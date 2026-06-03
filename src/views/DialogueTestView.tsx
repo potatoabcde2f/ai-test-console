@@ -45,29 +45,135 @@ interface APIConfig {
 interface APIVisualizerViewProps {
   onSaveToConversations?: (conv: StoredConversation) => void;
   onSaveImageGen?: (record: ImageGenRecord) => void;
+  // 外部状态（用于保持对话）
+  externalMessages?: any[];
+  setExternalMessages?: (messages: any[]) => void;
+  externalChatId?: string;
+  setExternalChatId?: (chatId: string) => void;
+  externalInput?: string;
+  setExternalInput?: (input: string) => void;
+  externalLoading?: boolean;
+  setExternalLoading?: (loading: boolean) => void;
+  externalPendingImages?: any[];
+  setExternalPendingImages?: (images: any[]) => void;
+  externalFollowUpQuestions?: string[];
+  setExternalFollowUpQuestions?: (questions: string[]) => void;
+  externalVerdict?: "pass" | "fail" | "pending";
+  setExternalVerdict?: (verdict: "pass" | "fail" | "pending") => void;
+  externalScore?: number | null;
+  setExternalScore?: (score: number | null) => void;
+  externalOptimizations?: string;
+  setExternalOptimizations?: (opt: string) => void;
+  externalTags?: string[];
+  setExternalTags?: (tags: string[]) => void;
 }
 
-export function DialogueTestView({ onSaveToConversations, onSaveImageGen }: APIVisualizerViewProps) {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [chatId, setChatId] = useState<string>("");
+export function DialogueTestView({
+  onSaveToConversations,
+  onSaveImageGen,
+  externalMessages,
+  setExternalMessages,
+  externalChatId,
+  setExternalChatId,
+  externalInput,
+  setExternalInput,
+  externalLoading,
+  setExternalLoading,
+  externalPendingImages,
+  setExternalPendingImages,
+  externalFollowUpQuestions,
+  setExternalFollowUpQuestions,
+  externalVerdict,
+  setExternalVerdict,
+  externalScore,
+  setExternalScore,
+  externalOptimizations,
+  setExternalOptimizations,
+  externalTags,
+  setExternalTags,
+}: APIVisualizerViewProps) {
+  // 使用外部状态或内部状态
+  const [internalMessages, setInternalMessages] = useState<Message[]>([]);
+  const messages = externalMessages !== undefined ? externalMessages : internalMessages;
+  const setMessages: React.Dispatch<React.SetStateAction<Message[]>> = (value) => {
+    if (setExternalMessages) {
+      const newValue = typeof value === 'function' ? (value as Function)(messages) : value;
+      setExternalMessages(newValue);
+    } else {
+      setInternalMessages(value);
+    }
+  };
+
+  const [internalChatId, setInternalChatId] = useState<string>("");
+  const chatId = externalChatId !== undefined ? externalChatId : internalChatId;
+  const setChatId = (value: string | ((prev: string) => string)) => {
+    if (setExternalChatId) {
+      const newValue = typeof value === 'function' ? (value as Function)(chatId) : value;
+      setExternalChatId(newValue);
+    } else {
+      setInternalChatId(value as any);
+    }
+  };
+
+  const [internalInput, setInternalInput] = useState("");
+  const input = externalInput !== undefined ? externalInput : internalInput;
+  const setInput = (value: string | ((prev: string) => string)) => {
+    if (setExternalInput) {
+      const newValue = typeof value === 'function' ? (value as Function)(input) : value;
+      setExternalInput(newValue);
+    } else {
+      setInternalInput(value as any);
+    }
+  };
+
+  const [internalLoading, setInternalLoading] = useState(false);
+  const loading = externalLoading !== undefined ? externalLoading : internalLoading;
+  const setLoading = (value: boolean | ((prev: boolean) => boolean)) => {
+    if (setExternalLoading) {
+      const newValue = typeof value === 'function' ? (value as Function)(loading) : value;
+      setExternalLoading(newValue);
+    } else {
+      setInternalLoading(value as any);
+    }
+  };
+
+  const [internalPendingImages, setInternalPendingImages] = useState<MessageImage[]>([]);
+  const pendingImages = externalPendingImages !== undefined ? externalPendingImages : internalPendingImages;
+  const setPendingImages: React.Dispatch<React.SetStateAction<MessageImage[]>> = (value) => {
+    if (setExternalPendingImages) {
+      const newValue = typeof value === 'function' ? (value as Function)(pendingImages) : value;
+      setExternalPendingImages(newValue);
+    } else {
+      setInternalPendingImages(value);
+    }
+  };
+
+  const [internalFollowUpQuestions, setInternalFollowUpQuestions] = useState<string[]>([]);
+  const followUpQuestions = externalFollowUpQuestions !== undefined ? externalFollowUpQuestions : internalFollowUpQuestions;
+  const setFollowUpQuestions = setExternalFollowUpQuestions || setInternalFollowUpQuestions;
+
+  const [internalVerdict, setInternalVerdict] = useState<"pass" | "fail" | "pending">("pending");
+  const verdict = externalVerdict !== undefined ? externalVerdict : internalVerdict;
+  const setVerdict = setExternalVerdict || setInternalVerdict;
+
+  const [internalScore, setInternalScore] = useState<number | null>(null);
+  const score = externalScore !== undefined ? externalScore : internalScore;
+  const setScore = setExternalScore || setInternalScore;
+
+  const [internalOptimizations, setInternalOptimizations] = useState("");
+  const optimizations = externalOptimizations !== undefined ? externalOptimizations : internalOptimizations;
+  const setOptimizations = setExternalOptimizations || setInternalOptimizations;
+
+  const [internalTags, setInternalTags] = useState<string[]>([]);
+  const tags = externalTags !== undefined ? externalTags : internalTags;
+  const setTags = setExternalTags || setInternalTags;
+
   const [showConfig, setShowConfig] = useState(false);
-  const [pendingImages, setPendingImages] = useState<MessageImage[]>([]);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 评测区状态
-  const [verdict, setVerdict] = useState<"pass" | "fail" | "pending">("pending");
-  const [score, setScore] = useState<number | null>(null);
-  const [optimizations, setOptimizations] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
-
-  // 追问气泡状态
-  const [followUpQuestions, setFollowUpQuestions] = useState<string[]>([]);
-
-  // Toast 状态
+  // Toast 状态（内部状态即可）
   const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: "" });
 
   const TAG_PRESETS = ["幻觉", "语气", "合规", "长度", "格式", "拒答", "多轮记忆"];
@@ -505,7 +611,7 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
       id: msg.id,
       role: msg.role as "user" | "assistant",
       content: msg.content,
-      images: msg.images?.map((img) => ({ url: img.url, type: img.type })),
+      images: msg.images?.map((img: MessageImage) => ({ url: img.url, type: img.type })),
       createdAt: msg.timestamp,
     }));
 
@@ -901,7 +1007,7 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
                       {msg.content && <div className="message-text">{msg.content}</div>}
                       {msg.images && msg.images.length > 0 && (
                         <div className="message-images">
-                          {msg.images.map((img, idx) => (
+                          {msg.images.map((img: MessageImage, idx: number) => (
                             <div
                               key={idx}
                               className="message-image-wrapper"
