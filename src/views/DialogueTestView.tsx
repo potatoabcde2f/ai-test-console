@@ -50,15 +50,21 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [chatId, setChatId] = useState<string>("");
-  const [showConfig, setShowConfig] = useState(false);
   const [pendingImages, setPendingImages] = useState<MessageImage[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 评测区状态
+  const [verdict, setVerdict] = useState<"pass" | "fail" | "pending">("pending");
+  const [score, setScore] = useState<number | null>(null);
+  const [optimizations, setOptimizations] = useState("");
+  const [tags, setTags] = useState<string[]>([]);
+
+  const TAG_PRESETS = ["幻觉", "语气", "合规", "长度", "格式", "拒答", "多轮记忆"];
+
   const [config, setConfig] = useState<APIConfig>({
-    baseUrl: "http://192.168.15.62:8082", // 生产环境使用完整地址，开发时可留空使用代理
+    baseUrl: "http://192.168.15.62:8082",
     chatSvc: "closet_gpt54mini",
     promptClosetChat: "",
     promptClosetChatSum: "",
@@ -154,23 +160,6 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
         setPendingImages((prev) => prev.filter((img) => img.status !== "uploading"));
       }
     }
-  };
-
-  // 拖拽处理
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(false);
-    handleFileUpload(e.dataTransfer.files);
   };
 
   // 移除待发送图片
@@ -427,7 +416,7 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
   };
 
   return (
-    <div className="api-dialogue-view">
+    <div className="api-dialogue-view" style={{ display: "flex", flexDirection: "column" }}>
       {/* 头部 */}
       <div className="api-header-bar">
         <div className="api-title-section">
@@ -438,13 +427,6 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
           </p>
         </div>
         <div className="api-actions">
-          <button
-            type="button"
-            className={`btn ${showConfig ? "btn-primary" : "btn-ghost"}`}
-            onClick={() => setShowConfig(!showConfig)}
-          >
-            {showConfig ? "隐藏配置" : "显示配置"}
-          </button>
           <button
             type="button"
             className="btn btn-secondary"
@@ -469,350 +451,335 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
         </div>
       </div>
 
-      {/* 配置面板遮罩 */}
-      {showConfig && (
-        <div className="api-config-overlay" onClick={() => setShowConfig(false)} />
-      )}
-
-      {/* 配置面板 */}
-      {showConfig && (
-        <div className="api-config-panel">
-          <div className="config-header">
-            <h3>⚙️ 接口配置</h3>
-            <button type="button" className="config-close-btn" onClick={() => setShowConfig(false)}>
-              ✕
-            </button>
+      {/* 三栏主体 */}
+      <div style={{ flex: 1, display: "grid", gridTemplateColumns: "320px 1fr 280px", gap: 12, minHeight: 0, overflow: "hidden" }}>
+        {/* 左侧：配置区 */}
+        <div className="panel scroll-y" style={{ padding: "0.85rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div style={{ fontWeight: 600, fontSize: "0.9rem", paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
+            ⚙️ 配置区
           </div>
-          <div className="config-grid">
-            <div className="config-row">
-              <label>
-                <span>Base URL (留空使用 Vite 代理)</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.baseUrl}
-                  onChange={(e) => setConfig((c) => ({ ...c, baseUrl: e.target.value }))}
-                  placeholder="http://192.168.15.62:8082"
-                />
-              </label>
-              <label>
-                <span>chat_svc</span>
-                <select
-                  className="input select"
-                  value={config.chatSvc}
-                  onChange={(e) => setConfig((c) => ({ ...c, chatSvc: e.target.value }))}
-                >
-                  <option value="">默认模型</option>
-                  <option value="qwen">qwen</option>
-                  <option value="qwen-vl">qwen-vl</option>
-                  <option value="qwen-vl-closet">qwen-vl-closet</option>
-                  <option value="qwen-vl-calo">qwen-vl-calo</option>
-                  <option value="closet_gpt4o">closet_gpt4o</option>
-                  <option value="closet_gpt4omini">closet_gpt4omini</option>
-                  <option value="qwen-turbo">qwen-turbo</option>
-                  <option value="closet_gemini3flash">closet_gemini3flash</option>
-                  <option value="closet_gemini2.5flash">closet_gemini2.5flash</option>
-                  <option value="qwen-max">qwen-max</option>
-                  <option value="closet_gemini2.5flash_backup">closet_gemini2.5flash_backup</option>
-                  <option value="closet_gpt54mini">closet_gpt54mini</option>
-                  <option value="qwen3max">qwen3max</option>
-                </select>
-              </label>
-            </div>
-            <div className="config-row">
-              <label>
-                <span>prompt_closet_chat</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.promptClosetChat}
-                  onChange={(e) => setConfig((c) => ({ ...c, promptClosetChat: e.target.value }))}
-                  placeholder="自定义 chat prompt"
-                />
-              </label>
-              <label>
-                <span>prompt_closet_chat_sum</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.promptClosetChatSum}
-                  onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatSum: e.target.value }))}
-                  placeholder="自定义 summary prompt"
-                />
-              </label>
-            </div>
-            <div className="config-row">
-              <label>
-                <span>prompt_closet_chat_image</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.promptClosetChatImage}
-                  onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatImage: e.target.value }))}
-                  placeholder="自定义 image prompt"
-                />
-              </label>
-              <label>
-                <span>prompt_closet_trend_filter</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.promptClosetTrendFilter}
-                  onChange={(e) => setConfig((c) => ({ ...c, promptClosetTrendFilter: e.target.value }))}
-                  placeholder="自定义 trend filter"
-                />
-              </label>
-            </div>
-            <div className="config-row">
-              <label>
-                <span>prompt_closet_chat_detect</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.promptClosetChatDetect}
-                  onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatDetect: e.target.value }))}
-                  placeholder="自定义 detect prompt"
-                />
-              </label>
-              <label>
-                <span>prompt_closet_chat_product</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.promptClosetChatProduct}
-                  onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatProduct: e.target.value }))}
-                  placeholder="自定义 product prompt"
-                />
-              </label>
-            </div>
-            <div className="config-fullwidth">
-              <label>
-                <span>prompt_img_extract_system</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.promptImgExtractSystem}
-                  onChange={(e) => setConfig((c) => ({ ...c, promptImgExtractSystem: e.target.value }))}
-                  placeholder="自定义 img extract system prompt"
-                />
-              </label>
-            </div>
-            <div className="config-row">
-              <label>
-                <span>debug</span>
-                <input
-                  type="text"
-                  className="input"
-                  value={config.debug}
-                  onChange={(e) => setConfig((c) => ({ ...c, debug: e.target.value }))}
-                  placeholder="model_debug"
-                />
-              </label>
-            </div>
+
+          {/* Base URL */}
+          <div>
+            <label className="label">Base URL</label>
+            <input
+              type="text"
+              className="input"
+              value={config.baseUrl}
+              onChange={(e) => setConfig((c) => ({ ...c, baseUrl: e.target.value }))}
+              placeholder="http://192.168.15.62:8082"
+            />
+          </div>
+
+          {/* chat_svc */}
+          <div>
+            <label className="label">chat_svc</label>
+            <select
+              className="input select"
+              value={config.chatSvc}
+              onChange={(e) => setConfig((c) => ({ ...c, chatSvc: e.target.value }))}
+            >
+              <option value="">默认模型</option>
+              <option value="qwen">qwen</option>
+              <option value="qwen-vl">qwen-vl</option>
+              <option value="qwen-vl-closet">qwen-vl-closet</option>
+              <option value="qwen-vl-calo">qwen-vl-calo</option>
+              <option value="closet_gpt4o">closet_gpt4o</option>
+              <option value="closet_gpt4omini">closet_gpt4omini</option>
+              <option value="qwen-turbo">qwen-turbo</option>
+              <option value="closet_gemini3flash">closet_gemini3flash</option>
+              <option value="closet_gemini2.5flash">closet_gemini2.5flash</option>
+              <option value="qwen-max">qwen-max</option>
+              <option value="closet_gemini2.5flash_backup">closet_gemini2.5flash_backup</option>
+              <option value="closet_gpt54mini">closet_gpt54mini</option>
+              <option value="qwen3max">qwen3max</option>
+            </select>
+          </div>
+
+          {/* prompt_params */}
+          <div>
+            <label className="label">prompt_closet_chat</label>
+            <input
+              type="text"
+              className="input"
+              value={config.promptClosetChat}
+              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChat: e.target.value }))}
+              placeholder="自定义 chat prompt"
+            />
+          </div>
+          <div>
+            <label className="label">prompt_closet_chat_sum</label>
+            <input
+              type="text"
+              className="input"
+              value={config.promptClosetChatSum}
+              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatSum: e.target.value }))}
+              placeholder="自定义 summary prompt"
+            />
+          </div>
+          <div>
+            <label className="label">prompt_closet_chat_image</label>
+            <input
+              type="text"
+              className="input"
+              value={config.promptClosetChatImage}
+              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatImage: e.target.value }))}
+              placeholder="自定义 image prompt"
+            />
+          </div>
+          <div>
+            <label className="label">prompt_closet_trend_filter</label>
+            <input
+              type="text"
+              className="input"
+              value={config.promptClosetTrendFilter}
+              onChange={(e) => setConfig((c) => ({ ...c, promptClosetTrendFilter: e.target.value }))}
+              placeholder="自定义 trend filter"
+            />
+          </div>
+          <div>
+            <label className="label">prompt_closet_chat_detect</label>
+            <input
+              type="text"
+              className="input"
+              value={config.promptClosetChatDetect}
+              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatDetect: e.target.value }))}
+              placeholder="自定义 detect prompt"
+            />
+          </div>
+          <div>
+            <label className="label">prompt_closet_chat_product</label>
+            <input
+              type="text"
+              className="input"
+              value={config.promptClosetChatProduct}
+              onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatProduct: e.target.value }))}
+              placeholder="自定义 product prompt"
+            />
+          </div>
+          <div>
+            <label className="label">prompt_img_extract_system</label>
+            <input
+              type="text"
+              className="input"
+              value={config.promptImgExtractSystem}
+              onChange={(e) => setConfig((c) => ({ ...c, promptImgExtractSystem: e.target.value }))}
+              placeholder="自定义 img extract system prompt"
+            />
+          </div>
+          <div>
+            <label className="label">debug</label>
+            <input
+              type="text"
+              className="input"
+              value={config.debug}
+              onChange={(e) => setConfig((c) => ({ ...c, debug: e.target.value }))}
+              placeholder="model_debug"
+            />
           </div>
         </div>
-      )}
 
-      {/* 对话区域 */}
-      <div className="api-messages-area">
-        {messages.length === 0 ? (
-          <div className="api-empty-state">
-            <div className="api-welcome">
-              <h3>👗 AI Stylist API 测试</h3>
-              <p>输入消息开始测试 /api/ai-stylist/send-message 接口</p>
-              <div className="api-features">
-                <span>支持连续对话（自动保存 chat_id）</span>
-                <span>支持图片上传（自动转图床 URL）</span>
-                <span>可配置自定义 prompt 模板</span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="api-messages">
-            {messages.map((msg) => (
-              <div key={msg.id} className={`api-message ${msg.role}`}>
-                <div className="message-avatar">
-                  {msg.role === "user" ? "👤" : "🤖"}
-                </div>
-                <div className="message-content">
-                  <div className="message-header">
-                    <span className="message-role">{msg.role === "user" ? "用户" : "AI Stylist"}</span>
-                    <span className="message-time">
-                      {new Date(msg.timestamp).toLocaleTimeString("zh-CN")}
-                    </span>
+        {/* 中间：对话区 */}
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
+          {/* 对话消息 */}
+          <div className="api-messages-area" style={{ flex: 1 }}>
+            {messages.length === 0 ? (
+              <div className="api-empty-state">
+                <div className="api-welcome">
+                  <h3>👗 AI Stylist API 测试</h3>
+                  <p>输入消息开始测试 /api/ai-stylist/send-message 接口</p>
+                  <div className="api-features">
+                    <span>支持连续对话（自动保存 chat_id）</span>
+                    <span>支持图片上传（自动转图床 URL）</span>
+                    <span>可配置自定义 prompt 模板</span>
                   </div>
-                  {msg.content && <div className="message-text">{msg.content}</div>}
-                  {/* 显示图片 */}
-                  {msg.images && msg.images.length > 0 && (
-                    <div className="message-images">
-                      {msg.images.map((img, idx) => (
-                        <div
-                          key={idx}
-                          className="message-image-wrapper"
-                          onClick={() => setPreviewImage(img.url)}
-                        >
-                          <img
-                            src={img.url}
-                            alt={`图片 ${idx + 1}`}
-                            className="message-image"
-                          />
-                          <span className="image-badge">{img.type === "upload" ? "📤" : "🤖"}</span>
-                        </div>
-                      ))}
+                </div>
+              </div>
+            ) : (
+              <div className="api-messages">
+                {messages.map((msg) => (
+                  <div key={msg.id} className={`api-message ${msg.role}`}>
+                    <div className="message-avatar">
+                      {msg.role === "user" ? "👤" : "🤖"}
                     </div>
-                  )}
-                  {msg.metadata?.chatId && (
-                    <div className="message-meta">Chat ID: {msg.metadata.chatId}</div>
-                  )}
-                  {(() => {
-                    const req = msg.metadata?.requestPayload;
-                    if (!req || msg.role !== "user") return null;
-                    return (
-                      <details className="message-debug request-payload">
-                        <summary>📤 请求 JSON</summary>
-                        <pre>{JSON.stringify(req, null, 2)}</pre>
-                      </details>
-                    );
-                  })()}
-                  {(() => {
-                    const metadata = msg.metadata;
-                    if (!metadata) return null;
-                    const df = metadata.debugFlow;
-                    if (!Array.isArray(df) || df.length === 0) return null;
-                    const flows = df as DebugFlowItem[];
-
-                    // 映射 closet_chat_detect 输出
-                    const mapDetectOutput = (output: string): string => {
-                      const map: Record<string, string> = {
-                        "1": "1: 生图需求",
-                        "2": "2: 通用穿搭问答",
-                        "3": "3: 产品介绍相关",
-                        "4": "4: 穿搭图片推荐",
-                      };
-                      return map[output] || output;
-                    };
-
-                    return (
-                      <details className="message-debug">
-                        <summary>📋 Debug Flow ({flows.length} 个步骤)</summary>
-                        <div className="debug-flow-list">
-                          {flows.map((flow, idx) => (
-                            <div key={idx} className="debug-flow-item">
-                              <div className="debug-flow-header">
-                                <span className="debug-step-num">步骤 {idx + 1}</span>
-                                <span className="debug-template">{flow.template || "unknown"}</span>
-                                {flow.chat_svc && <span className="debug-model">{flow.chat_svc}</span>}
-                              </div>
-                              <div className="debug-output">
-                                <pre>
-                                  {flow.template === "closet_chat_detect" && flow.output
-                                    ? mapDetectOutput(flow.output)
-                                    : flow.output || "(无输出)"}
-                                </pre>
-                              </div>
+                    <div className="message-content">
+                      <div className="message-header">
+                        <span className="message-role">{msg.role === "user" ? "用户" : "AI Stylist"}</span>
+                        <span className="message-time">
+                          {new Date(msg.timestamp).toLocaleTimeString("zh-CN")}
+                        </span>
+                      </div>
+                      {msg.content && <div className="message-text">{msg.content}</div>}
+                      {msg.images && msg.images.length > 0 && (
+                        <div className="message-images">
+                          {msg.images.map((img, idx) => (
+                            <div
+                              key={idx}
+                              className="message-image-wrapper"
+                              onClick={() => setPreviewImage(img.url)}
+                            >
+                              <img src={img.url} alt={`图片 ${idx + 1}`} className="message-image" />
+                              <span className="image-badge">{img.type === "upload" ? "📤" : "🤖"}</span>
                             </div>
                           ))}
                         </div>
-                      </details>
-                    );
-                  })()}
-                  {(() => {
-                    const raw = msg.metadata?.rawResponse;
-                    if (!raw) return null;
-                    return (
-                      <details className="message-debug raw-response">
-                        <summary>📄 完整响应数据</summary>
-                        <pre>{JSON.stringify(raw, null, 2)}</pre>
-                      </details>
-                    );
-                  })()}
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="api-message assistant loading">
-                <div className="message-avatar">🤖</div>
-                <div className="message-content">
-                  <div className="typing-indicator">
-                    <span></span>
-                    <span></span>
-                    <span></span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        )}
-      </div>
-
-      {/* 输入区域 */}
-      <div
-        className={`api-input-area ${isDragging ? "dragging" : ""}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        {/* 待发送图片预览 */}
-        {pendingImages.length > 0 && (
-          <div className="pending-images">
-            {pendingImages.map((img, idx) => (
-              <div key={idx} className={`pending-image-item ${img.status === "uploading" ? "uploading" : ""}`}>
-                <img src={img.url} alt={`待发送 ${idx + 1}`} />
-                {img.status === "uploading" && (
-                  <div className="upload-overlay">
-                    <span className="upload-spinner"></span>
-                    <span className="upload-text">上传中</span>
+                ))}
+                {loading && (
+                  <div className="api-message assistant loading">
+                    <div className="message-avatar">🤖</div>
+                    <div className="message-content">
+                      <div className="typing-indicator">
+                        <span></span><span></span><span></span>
+                      </div>
+                    </div>
                   </div>
                 )}
-                <button
-                  type="button"
-                  className="remove-image-btn"
-                  onClick={() => removePendingImage(idx)}
-                >
-                  ✕
+                <div ref={messagesEndRef} />
+              </div>
+            )}
+          </div>
+
+          {/* 输入区 */}
+          <div className="api-input-area">
+            {pendingImages.length > 0 && (
+              <div className="pending-images">
+                {pendingImages.map((img, idx) => (
+                  <div key={idx} className={`pending-image-item ${img.status === "uploading" ? "uploading" : ""}`}>
+                    <img src={img.url} alt={`待发送 ${idx + 1}`} />
+                    {img.status === "uploading" && (
+                      <div className="upload-overlay">
+                        <span className="upload-spinner"></span>
+                        <span className="upload-text">上传中</span>
+                      </div>
+                    )}
+                    <button type="button" className="remove-image-btn" onClick={() => removePendingImage(idx)}>
+                      ✕
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="api-input-wrapper">
+              <textarea
+                className="api-textarea"
+                placeholder="输入消息，按 Enter 发送，Shift+Enter 换行..."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                disabled={loading}
+                rows={3}
+              />
+              <div className="api-input-actions">
+                <button type="button" className="upload-btn-with-text" onClick={() => fileInputRef.current?.click()}>
+                  <span className="upload-icon">📎</span>
+                  <span className="upload-label">上传图片</span>
+                </button>
+                <input ref={fileInputRef} type="file" accept="image/*" multiple style={{ display: "none" }} onChange={(e) => handleFileUpload(e.target.files)} />
+                <button type="button" className="api-send-btn" onClick={sendMessage} disabled={loading || (!input.trim() && pendingImages.length === 0)}>
+                  {loading ? "发送中..." : "发送"}
                 </button>
               </div>
-            ))}
+            </div>
           </div>
-        )}
+        </div>
 
-        <div className="api-input-wrapper">
-          <textarea
-            className="api-textarea"
-            placeholder="输入消息，按 Enter 发送，Shift+Enter 换行...拖拽或点击上传图片"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={loading}
-            rows={3}
-          />
-          <div className="api-input-actions">
-            <button
-              type="button"
-              className="upload-btn-with-text"
-              onClick={() => fileInputRef.current?.click()}
-              title="上传图片"
-            >
-              <span className="upload-icon">📎</span>
-              <span className="upload-label">上传图片</span>
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              style={{ display: "none" }}
-              onChange={(e) => handleFileUpload(e.target.files)}
+        {/* 右侧：评测区 */}
+        <div className="panel scroll-y" style={{ padding: "0.85rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div style={{ fontWeight: 600, fontSize: "0.9rem", paddingBottom: 8, borderBottom: "1px solid var(--border)" }}>
+            📊 评测区
+          </div>
+
+          {/* 结论 */}
+          <div>
+            <label className="label" style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ color: "#dc2626", fontWeight: "bold" }}>*</span>
+              结论
+            </label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {(
+                [
+                  ["pass", "通过", "#16a34a"],
+                  ["fail", "不通过", "#dc2626"],
+                  ["pending", "待定", "#64748b"],
+                ] as const
+              ).map(([v, label, c]) => {
+                const on = verdict === v;
+                return (
+                  <button
+                    key={v}
+                    type="button"
+                    className="btn"
+                    onClick={() => setVerdict(v)}
+                    style={on ? { borderColor: c, color: c, background: `${c}14`, flex: 1 } : { flex: 1 }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 分数 */}
+          <div>
+            <label className="label">评分（1-5）</label>
+            <div style={{ display: "flex", gap: 6 }}>
+              {[1, 2, 3, 4, 5].map((s) => {
+                const on = score === s;
+                return (
+                  <button
+                    key={s}
+                    type="button"
+                    className="btn"
+                    onClick={() => setScore(s)}
+                    style={on ? { borderColor: "#2563eb", color: "#2563eb", background: "#2563eb14", flex: 1 } : { flex: 1 }}
+                  >
+                    {s}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 优化点 */}
+          <div>
+            <label className="label">优化点</label>
+            <textarea
+              className="textarea-field"
+              rows={3}
+              placeholder="记录优化建议..."
+              value={optimizations}
+              onChange={(e) => setOptimizations(e.target.value)}
             />
-            <button
-              type="button"
-              className="api-send-btn"
-              onClick={sendMessage}
-              disabled={loading || (!input.trim() && pendingImages.length === 0)}
-            >
-              {loading ? "发送中..." : "发送"}
-            </button>
+          </div>
+
+          {/* 标签 */}
+          <div>
+            <label className="label">问题标签</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {TAG_PRESETS.map((t) => {
+                const on = tags.includes(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    className="chip"
+                    onClick={() =>
+                      on ? setTags(tags.filter((x) => x !== t)) : setTags([...tags, t])
+                    }
+                    style={{
+                      cursor: "pointer",
+                      borderColor: on ? "rgba(37,99,235,0.4)" : undefined,
+                      color: on ? "var(--accent)" : undefined,
+                    }}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -822,13 +789,7 @@ export function DialogueTestView({ onSaveToConversations }: APIVisualizerViewPro
         <div className="image-preview-modal" onClick={() => setPreviewImage(null)}>
           <div className="image-preview-content">
             <img src={previewImage} alt="预览" />
-            <button
-              type="button"
-              className="close-preview-btn"
-              onClick={() => setPreviewImage(null)}
-            >
-              ✕
-            </button>
+            <button type="button" className="close-preview-btn" onClick={() => setPreviewImage(null)}>✕</button>
           </div>
         </div>
       )}
