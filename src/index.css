@@ -739,7 +739,8 @@ textarea {
 .api-dialogue-view {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
+  min-height: 0;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: var(--radius);
@@ -1817,19 +1818,21 @@ textarea {
 }
 
 .upload-btn-with-text {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.75rem 1rem;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 1rem;
   background: var(--bg-panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   font-weight: 500;
   color: var(--text);
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+  line-height: 1;
 }
 
 .upload-btn-with-text:hover {
@@ -1838,11 +1841,16 @@ textarea {
 }
 
 .upload-btn-with-text .upload-icon {
-  font-size: 0.875rem;
+  font-size: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .upload-btn-with-text .upload-label {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
+  line-height: 1;
 }
 
 .api-input-hint {

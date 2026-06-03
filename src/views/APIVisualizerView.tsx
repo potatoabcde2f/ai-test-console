@@ -742,12 +742,6 @@ export function APIVisualizerView() {
             </button>
           </div>
         </div>
-        <div className="api-input-hint">
-          <span>Enter 发送</span>
-          <span>Shift+Enter 换行</span>
-          <span>拖拽或点击 📎 上传图片</span>
-          {chatId && <span>当前会话: {chatId}</span>}
-        </div>
       </div>
 
       {/* 图片预览弹窗 */}
