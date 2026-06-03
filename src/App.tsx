@@ -443,7 +443,11 @@ export function App() {
               prompts={prompts}
             />
           )}
-          {nav === "apiVisualizer" && <APIVisualizerView />}
+          {nav === "apiVisualizer" && (
+            <APIVisualizerView
+              onSaveToConversations={(conv) => setConversations((prev) => [conv, ...prev])}
+            />
+          )}
           {nav === "imageUpload" && <ImageUploadView />}
         </div>
       </main>

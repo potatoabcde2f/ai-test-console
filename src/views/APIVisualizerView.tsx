@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { StoredConversation } from "../types";
+import { uid } from "../lib/ids";
 
 interface DebugFlowItem {
   template?: string;
@@ -39,7 +41,11 @@ interface APIConfig {
   debug: string;
 }
 
-export function APIVisualizerView() {
+interface APIVisualizerViewProps {
+  onSaveToConversations?: (conv: StoredConversation) => void;
+}
+
+export function APIVisualizerView({ onSaveToConversations }: APIVisualizerViewProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -334,6 +340,47 @@ export function APIVisualizerView() {
     }
   };
 
+  // 保存到对话结果存储
+  const saveToLibrary = () => {
+    if (messages.length === 0 || !onSaveToConversations) return;
+
+    const title = window.prompt("对话标题（列表展示）", `API 对话 ${new Date().toLocaleString("zh-CN")}`);
+    if (!title) return;
+
+    // 转换 Message[] 到 ChatMessage[]
+    const chatMessages = messages.map((msg) => ({
+      id: msg.id,
+      role: msg.role as "user" | "assistant",
+      content: msg.content,
+      images: msg.images?.map((img) => ({ url: img.url, type: img.type })),
+      createdAt: msg.timestamp,
+    }));
+
+    const conv: StoredConversation = {
+      id: uid("conv"),
+      title,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      modelId: config.chatSvc || "closet_gpt54mini",
+      imageModelId: "",
+      promptId: "",
+      promptVersionName: "API 测试",
+      systemPromptContent: JSON.stringify(config),
+      userProfileSnapshot: "",
+      messages: chatMessages,
+      evaluation: {
+        verdict: "pending",
+        score: null,
+        notes: "",
+        optimizations: "",
+        tags: [],
+      },
+    };
+
+    onSaveToConversations(conv);
+    window.alert("已保存到「对话结果存储」！");
+  };
+
   // 导出对话为 JSON
   const exportConversation = () => {
     if (messages.length === 0) return;
@@ -406,6 +453,15 @@ export function APIVisualizerView() {
             title={messages.length === 0 ? "没有可导出的对话" : "导出对话为 JSON"}
           >
             ⬇️ 导出对话
+          </button>
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={saveToLibrary}
+            disabled={messages.length === 0 || !onSaveToConversations}
+            title={messages.length === 0 ? "没有可保存的对话" : "保存到对话结果存储"}
+          >
+            💾 保存到对话库
           </button>
           <button type="button" className="btn btn-danger" onClick={clearChat}>
             清空对话
