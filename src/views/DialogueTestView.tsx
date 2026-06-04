@@ -815,12 +815,12 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
       )}
 
       {/* 头部 */}
-      <div className="api-header-bar">
-        <div className="api-title-section">
-          <h2>AI Stylist 对话</h2>
-          <p className="api-endpoint">
+      <div className="api-header-bar" style={{ padding: "0.75rem 1rem", minHeight: "auto" }}>
+        <div className="api-title-section" style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <h2 style={{ margin: 0, fontSize: "1rem" }}>AI Stylist 对话</h2>
+          <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
             {chatId ? `Chat ID: ${chatId}` : "新对话"}
-          </p>
+          </span>
         </div>
         <div className="api-actions">
           <button
