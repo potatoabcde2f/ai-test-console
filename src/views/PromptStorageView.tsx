@@ -68,17 +68,20 @@ export function PromptStorageView({
       const autoName = getNextVersionName();
       onChange({ id: unnamedPrompt.id, name: autoName });
       onSelect(unnamedPrompt.id);
+      // 自动进入编辑状态
       setEditingId(unnamedPrompt.id);
       setDraftContent("");
     }
   }, [prompts, activeTab, getNextVersionName, onChange, onSelect]);
 
-  // 切换分类
+  // 切换分类 - 删除未提交的版本（systemPrompt为空）
   const handleTabChange = (tabId: string) => {
-    // 切换前删除未保存的空版本（systemPrompt为空且不是已选中的）
-    const currentPrompt = prompts.find((p) => p.id === activeId);
-    if (currentPrompt && currentPrompt.systemPrompt === "" && activeTab === currentPrompt.category) {
-      onDelete(currentPrompt.id);
+    // 切换前删除当前选中的未提交版本（systemPrompt为空）
+    if (activeId && activeTab) {
+      const currentPrompt = prompts.find((p) => p.id === activeId && p.category === activeTab);
+      if (currentPrompt && (!currentPrompt.systemPrompt || currentPrompt.systemPrompt === "")) {
+        onDelete(currentPrompt.id);
+      }
     }
 
     setActiveTab(tabId);
@@ -110,12 +113,14 @@ export function PromptStorageView({
     setDraftContent("");
   };
 
-  // 提交保存
+  // 提交保存 - 必须输入内容才算成功
   const handleSubmit = () => {
     if (editingId && draftContent.trim()) {
-      onChange({ id: editingId, systemPrompt: draftContent.trim() });
+      onChange({ id: editingId, systemPrompt: draftContent.trim(), updatedAt: Date.now() });
       setEditingId(null);
       setDraftContent("");
+    } else {
+      alert("请输入提示词内容");
     }
   };
 
