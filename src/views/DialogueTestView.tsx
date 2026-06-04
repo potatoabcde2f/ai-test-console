@@ -751,6 +751,13 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
       }
       if (config.debug) payload.debug = config.debug;
 
+      // 更新用户消息，添加请求 payload
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === userMsg.id ? { ...m, metadata: { ...m.metadata, requestPayload: payload } } : m
+        )
+      );
+
       // 调用 API
       const apiUrl = config.baseUrl ? `${config.baseUrl}${AI_STYLIST_API_URL}` : AI_STYLIST_API_URL;
       fetch(apiUrl, {
