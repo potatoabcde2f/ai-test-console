@@ -75,6 +75,12 @@ export function PromptStorageView({
 
   // 切换分类
   const handleTabChange = (tabId: string) => {
+    // 切换前删除未保存的空版本（systemPrompt为空且不是已选中的）
+    const currentPrompt = prompts.find((p) => p.id === activeId);
+    if (currentPrompt && currentPrompt.systemPrompt === "" && activeTab === currentPrompt.category) {
+      onDelete(currentPrompt.id);
+    }
+
     setActiveTab(tabId);
     const firstInTab = prompts.find((p) => p.category === tabId);
     if (firstInTab) {
@@ -351,7 +357,12 @@ export function PromptStorageView({
                       width: 60,
                       fontSize: "0.8rem",
                       padding: "2px 4px",
-                      margin: -2
+                      margin: -2,
+                      background: activeId === p.id ? "var(--accent)" : "var(--bg-panel)",
+                      color: activeId === p.id ? "#fff" : "var(--text)",
+                      border: "1px solid var(--border)",
+                      borderRadius: 4,
+                      outline: "none"
                     }}
                     onClick={(e) => e.stopPropagation()}
                   />
