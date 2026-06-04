@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import type { PromptTemplate, PromptCategoryConfig } from "../types";
 import { uid } from "../lib/ids";
 
@@ -12,11 +12,6 @@ interface Props {
   onDelete: (id: string) => void;
   onNew: (category?: string) => void;
   onChangeCategories: (categories: PromptCategoryConfig[]) => void;
-}
-
-function formatTime(ts: number): string {
-  const d = new Date(ts);
-  return d.toLocaleString("zh-CN", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
 export function PromptStorageView({
@@ -36,6 +31,8 @@ export function PromptStorageView({
   const [showCategoryManage, setShowCategoryManage] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editingPromptName, setEditingPromptName] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
 
   // 当前分类的提示词
   const filteredPrompts = useMemo(() =>
@@ -48,6 +45,19 @@ export function PromptStorageView({
 
   // 当前分类
   const activeCategory = categories.find((c) => c.id === activeTab);
+
+  // 生成下一个版本号 V1, V2...
+  const getNextVersionName = useCallback(() => {
+    const versionRegex = /^V(\d+)$/;
+    const existingVersions = filteredPrompts
+      .map((p) => {
+        const match = p.name.match(versionRegex);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter((v) => v > 0);
+    const maxVersion = existingVersions.length > 0 ? Math.max(...existingVersions) : 0;
+    return `V${maxVersion + 1}`;
+  }, [filteredPrompts]);
 
   // 切换分类
   const handleTabChange = (tabId: string) => {
@@ -89,13 +99,15 @@ export function PromptStorageView({
     }
   };
 
-  // 新建提示词
+  // 新建提示词 - 自动生成 V1, V2...
   const handleNewPrompt = () => {
     const prevIds = new Set(prompts.map((p) => p.id));
+    const autoName = getNextVersionName();
     onNew(activeTab);
     setTimeout(() => {
       const newPrompt = prompts.find((p) => !prevIds.has(p.id));
       if (newPrompt) {
+        onChange({ id: newPrompt.id, name: autoName });
         onSelect(newPrompt.id);
         setEditingId(newPrompt.id);
         setDraftContent(newPrompt.systemPrompt);
@@ -107,6 +119,22 @@ export function PromptStorageView({
   const handleDeletePrompt = (id: string) => {
     if (window.confirm("确定删除这条提示词吗？")) {
       onDelete(id);
+    }
+  };
+
+  // 右键菜单 - 开始编辑名字
+  const handleContextMenu = (e: React.MouseEvent, prompt: PromptTemplate) => {
+    e.preventDefault();
+    setEditingPromptName(prompt.id);
+    setDraftName(prompt.name);
+  };
+
+  // 保存名字修改
+  const handleSaveName = () => {
+    if (editingPromptName && draftName.trim()) {
+      onChange({ id: editingPromptName, name: draftName.trim() });
+      setEditingPromptName(null);
+      setDraftName("");
     }
   };
 
@@ -265,14 +293,14 @@ export function PromptStorageView({
 
       {/* 主内容区 */}
       <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
-        {/* 左侧列表 */}
         <div style={{
-          width: 240,
           borderRight: "1px solid var(--border)",
           background: "var(--bg-panel)",
           display: "flex",
-          flexDirection: "column"
+          flexDirection: "column",
+          width: "100%"
         }}>
+          {/* 顶部工具栏 */}
           <div style={{
             padding: "12px 16px",
             borderBottom: "1px solid var(--border)",
@@ -281,7 +309,7 @@ export function PromptStorageView({
             alignItems: "center"
           }}>
             <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>
-              {activeCategory?.name}
+              {activeCategory?.name}版本
             </span>
             <button
               type="button"
@@ -292,169 +320,140 @@ export function PromptStorageView({
               + 新建
             </button>
           </div>
-          <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
+
+          {/* 横向版本列表 */}
+          <div style={{
+            display: "flex",
+            gap: 8,
+            padding: "12px 16px",
+            borderBottom: "1px solid var(--border)",
+            background: "var(--bg-subtle)"
+          }}>
             {filteredPrompts.map((p) => (
               <div
                 key={p.id}
                 onClick={() => {
                   onSelect(p.id);
                   setEditingId(null);
+                  setEditingPromptName(null);
                 }}
+                onContextMenu={(e) => handleContextMenu(e, p)}
                 style={{
-                  padding: "10px 12px",
-                  marginBottom: 4,
+                  padding: "8px 16px",
                   borderRadius: 6,
                   cursor: "pointer",
-                  background: activeId === p.id ? "var(--accent-soft)" : "transparent",
-                  borderLeft: activeId === p.id ? "3px solid var(--accent)" : "3px solid transparent",
+                  background: activeId === p.id ? "var(--accent)" : "var(--bg-panel)",
+                  color: activeId === p.id ? "#fff" : "var(--text)",
+                  fontSize: "0.85rem",
+                  fontWeight: activeId === p.id ? 500 : 400,
+                  border: activeId === p.id ? "none" : "1px solid var(--border)",
                   transition: "all 0.15s",
+                  position: "relative",
                 }}
               >
-                <div style={{
-                  fontWeight: activeId === p.id ? 500 : 400,
-                  fontSize: "0.85rem",
-                  marginBottom: 4,
-                  color: activeId === p.id ? "var(--accent)" : "var(--text)"
-                }}>
-                  {p.name}
-                </div>
-                <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
-                  {formatTime(p.updatedAt)}
-                </div>
+                {editingPromptName === p.id ? (
+                  <input
+                    className="input"
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onBlur={handleSaveName}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleSaveName();
+                      if (e.key === "Escape") {
+                        setEditingPromptName(null);
+                        setDraftName("");
+                      }
+                    }}
+                    autoFocus
+                    style={{
+                      width: 60,
+                      fontSize: "0.8rem",
+                      padding: "2px 4px",
+                      margin: -2
+                    }}
+                    onClick={(e) => e.stopPropagation()}
+                  />
+                ) : (
+                  <span>{p.name}</span>
+                )}
               </div>
             ))}
           </div>
-        </div>
 
-        {/* 右侧详情区 */}
-        <div style={{ flex: 1, padding: 20, background: "var(--bg)", overflow: "auto" }}>
-          {activePrompt ? (
-            <div style={{ maxWidth: 800, margin: "0 auto" }}>
-              {/* 提示词标题 */}
-              <div style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: 16
-              }}>
-                <input
-                  className="input"
-                  value={activePrompt.name}
-                  onChange={(e) => onChange({ id: activePrompt.id, name: e.target.value })}
-                  style={{
-                    fontSize: "1.1rem",
-                    fontWeight: 600,
-                    flex: 1,
-                    marginRight: 12
-                  }}
-                />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button
-                    type="button"
-                    className="btn"
-                    onClick={() => onDuplicate(activePrompt.id)}
-                  >
-                    复制
-                  </button>
-                  <button
-                    type="button"
-                    className="btn btn-danger"
-                    onClick={() => handleDeletePrompt(activePrompt.id)}
-                  >
-                    删除
-                  </button>
-                </div>
-              </div>
-
-              {/* 提示词内容卡片 */}
-              <div style={{
-                background: "#fff",
-                borderRadius: 8,
-                border: "1px solid var(--border)",
-                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
-                marginBottom: 16
-              }}>
-                {editingId === activePrompt.id ? (
-                  <textarea
-                    className="textarea-field"
-                    value={draftContent}
-                    onChange={(e) => setDraftContent(e.target.value)}
-                    style={{
-                      width: "100%",
-                      minHeight: 400,
+          {/* 提示词内容区域 */}
+          <div style={{ flex: 1, padding: 20, overflow: "auto", background: "var(--bg)" }}>
+            {activePrompt ? (
+              <div style={{ maxWidth: 900, margin: "0 auto" }}>
+                {/* 提示词内容卡片 - 只展示内容 */}
+                <div style={{
+                  background: "#fff",
+                  borderRadius: 8,
+                  border: "1px solid var(--border)",
+                  boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                  marginBottom: 16
+                }}>
+                  {editingId === activePrompt.id ? (
+                    <textarea
+                      className="textarea-field"
+                      value={draftContent}
+                      onChange={(e) => setDraftContent(e.target.value)}
+                      style={{
+                        width: "100%",
+                        minHeight: 400,
+                        padding: 16,
+                        border: "none",
+                        borderRadius: 8,
+                        fontSize: "0.9rem",
+                        lineHeight: 1.6,
+                        fontFamily: 'var(--font-mono), ui-monospace, monospace',
+                        resize: "vertical",
+                        outline: "none"
+                      }}
+                    />
+                  ) : (
+                    <div style={{
                       padding: 16,
-                      border: "none",
-                      borderRadius: 8,
+                      minHeight: 400,
                       fontSize: "0.9rem",
                       lineHeight: 1.6,
+                      whiteSpace: "pre-wrap",
                       fontFamily: 'var(--font-mono), ui-monospace, monospace',
-                      resize: "vertical",
-                      outline: "none"
-                    }}
-                  />
-                ) : (
-                  <div style={{
-                    padding: 16,
-                    minHeight: 400,
-                    fontSize: "0.9rem",
-                    lineHeight: 1.6,
-                    whiteSpace: "pre-wrap",
-                    fontFamily: 'var(--font-mono), ui-monospace, monospace',
-                    color: "var(--text)"
-                  }}>
-                    {activePrompt.systemPrompt}
-                  </div>
-                )}
-              </div>
+                      color: "var(--text)"
+                    }}>
+                      {activePrompt.systemPrompt}
+                    </div>
+                  )}
+                </div>
 
-              {/* 底部按钮 */}
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
-                {editingId === activePrompt.id ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn"
-                      onClick={handleReset}
-                    >
-                      重置
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleUseCurrent}
-                    >
-                      使用当前版本
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      onClick={handleSubmit}
-                    >
-                      提交
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleEdit}
-                  >
-                    编辑
-                  </button>
-                )}
+                {/* 底部按钮 */}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                  {editingId === activePrompt.id ? (
+                    <>
+                      <button type="button" className="btn" onClick={handleReset}>重置</button>
+                      <button type="button" className="btn btn-secondary" onClick={handleUseCurrent}>使用当前版本</button>
+                      <button type="button" className="btn btn-primary" onClick={handleSubmit}>提交</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="btn" onClick={() => onDuplicate(activePrompt.id)}>复制</button>
+                      <button type="button" className="btn btn-danger" onClick={() => handleDeletePrompt(activePrompt.id)}>删除</button>
+                      <button type="button" className="btn btn-primary" onClick={handleEdit}>编辑</button>
+                    </>
+                  )}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              height: "100%",
-              color: "var(--text-muted)"
-            }}>
-              请选择一条提示词
-            </div>
-          )}
+            ) : (
+              <div style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                height: "100%",
+                color: "var(--text-muted)"
+              }}>
+                请选择一个版本
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
