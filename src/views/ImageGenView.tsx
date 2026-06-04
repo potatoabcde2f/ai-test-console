@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { ImageGenRecord } from "../types";
 
 interface Props {
@@ -9,6 +10,8 @@ function fmtTime(ts: number) {
 }
 
 export function ImageGenView({ records }: Props) {
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
       <div>
@@ -40,7 +43,12 @@ export function ImageGenView({ records }: Props) {
               records.map((r) => (
                 <tr key={r.id}>
                   <td style={{ width: 120 }}>
-                    <img src={r.previewUrl} alt="" style={{ width: 100, height: 100, borderRadius: 8, objectFit: "contain", border: "1px solid var(--border)" }} />
+                    <img
+                      src={r.previewUrl}
+                      alt=""
+                      style={{ width: 100, height: 100, borderRadius: 8, objectFit: "contain", border: "1px solid var(--border)", cursor: "pointer" }}
+                      onClick={() => setPreviewImage(r.previewUrl)}
+                    />
                   </td>
                   <td>
                     <code style={{ fontSize: "0.75rem" }}>{r.id}</code>
@@ -57,6 +65,16 @@ export function ImageGenView({ records }: Props) {
           </tbody>
         </table>
       </div>
+
+      {/* 图片预览弹窗 */}
+      {previewImage && (
+        <div className="image-preview-modal" onClick={() => setPreviewImage(null)}>
+          <div className="image-preview-content" style={{ maxWidth: "90vw", maxHeight: "90vh" }}>
+            <img src={previewImage} alt="预览" style={{ maxWidth: "100%", maxHeight: "90vh", objectFit: "contain" }} />
+            <button type="button" className="close-preview-btn" onClick={() => setPreviewImage(null)}>✕</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
