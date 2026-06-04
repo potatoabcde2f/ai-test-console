@@ -97,8 +97,14 @@ export function DialogueTestView({
   const messages = externalMessages !== undefined ? externalMessages : internalMessages;
   const setMessages: React.Dispatch<React.SetStateAction<Message[]>> = (value) => {
     if (setExternalMessages) {
-      const newValue = typeof value === 'function' ? (value as Function)(messages) : value;
-      setExternalMessages(newValue);
+      if (typeof value === 'function') {
+        // 获取最新状态
+        const currentMessages = externalMessages !== undefined ? externalMessages : internalMessages;
+        const newValue = (value as Function)(currentMessages);
+        setExternalMessages(newValue);
+      } else {
+        setExternalMessages(value);
+      }
     } else {
       setInternalMessages(value);
     }
@@ -141,8 +147,13 @@ export function DialogueTestView({
   const pendingImages = externalPendingImages !== undefined ? externalPendingImages : internalPendingImages;
   const setPendingImages: React.Dispatch<React.SetStateAction<MessageImage[]>> = (value) => {
     if (setExternalPendingImages) {
-      const newValue = typeof value === 'function' ? (value as Function)(pendingImages) : value;
-      setExternalPendingImages(newValue);
+      if (typeof value === 'function') {
+        const currentImages = externalPendingImages !== undefined ? externalPendingImages : internalPendingImages;
+        const newValue = (value as Function)(currentImages);
+        setExternalPendingImages(newValue);
+      } else {
+        setExternalPendingImages(value);
+      }
     } else {
       setInternalPendingImages(value);
     }
