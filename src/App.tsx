@@ -233,8 +233,8 @@ export function App() {
   const newPrompt = useCallback((category?: string) => {
     const p: PromptTemplate = {
       id: uid("pt"),
-      name: "未命名模板",
-      systemPrompt: "在此编写系统提示词…",
+      name: "",
+      systemPrompt: "",
       updatedAt: Date.now(),
       category: category ?? (promptCategories[0]?.id ?? "general"),
     };

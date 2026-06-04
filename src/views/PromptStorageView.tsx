@@ -40,8 +40,10 @@ export function PromptStorageView({
     [prompts, activeTab]
   );
 
-  // 当前选中的提示词
-  const activePrompt = prompts.find((p) => p.id === activeId);
+  // 当前选中的提示词 - 必须严格匹配id和category
+  const activePrompt = useMemo(() => {
+    return prompts.find((p) => p.id === activeId && p.category === activeTab);
+  }, [prompts, activeId, activeTab]);
 
   // 当前分类
   const activeCategory = categories.find((c) => c.id === activeTab);
@@ -101,18 +103,22 @@ export function PromptStorageView({
 
   // 新建提示词 - 自动生成 V1, V2...
   const handleNewPrompt = () => {
-    const prevIds = new Set(prompts.map((p) => p.id));
     const autoName = getNextVersionName();
+    // 先调用 onNew 创建空提示词
     onNew(activeTab);
-    setTimeout(() => {
-      const newPrompt = prompts.find((p) => !prevIds.has(p.id));
+    // 在下一个 tick 中找到新创建的提示词并命名
+    requestAnimationFrame(() => {
+      const newPrompt = prompts.find((p) =>
+        p.category === activeTab &&
+        (p.name === "" || p.name === "未命名模板")
+      );
       if (newPrompt) {
         onChange({ id: newPrompt.id, name: autoName });
         onSelect(newPrompt.id);
         setEditingId(newPrompt.id);
-        setDraftContent(newPrompt.systemPrompt);
+        setDraftContent("");
       }
-    }, 0);
+    });
   };
 
   // 删除提示词
@@ -122,9 +128,8 @@ export function PromptStorageView({
     }
   };
 
-  // 右键菜单 - 开始编辑名字
-  const handleContextMenu = (e: React.MouseEvent, prompt: PromptTemplate) => {
-    e.preventDefault();
+  // 双击编辑名字
+  const handleDoubleClick = (prompt: PromptTemplate) => {
     setEditingPromptName(prompt.id);
     setDraftName(prompt.name);
   };
@@ -309,7 +314,7 @@ export function PromptStorageView({
             alignItems: "center"
           }}>
             <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>
-              {activeCategory?.name}版本
+              {activeCategory?.name}
             </span>
             <button
               type="button"
@@ -337,7 +342,7 @@ export function PromptStorageView({
                   setEditingId(null);
                   setEditingPromptName(null);
                 }}
-                onContextMenu={(e) => handleContextMenu(e, p)}
+                onDoubleClick={() => handleDoubleClick(p)}
                 style={{
                   padding: "8px 16px",
                   borderRadius: 6,
