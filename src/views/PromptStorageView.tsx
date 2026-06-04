@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import type { PromptTemplate, PromptCategoryConfig } from "../types";
 import { uid } from "../lib/ids";
 
@@ -58,6 +58,21 @@ export function PromptStorageView({
     return `V${maxVersion + 1}`;
   }, [filteredPrompts]);
 
+  // 自动检测并命名新创建的提示词
+  useEffect(() => {
+    const unnamedPrompt = prompts.find((p) =>
+      p.category === activeTab &&
+      (p.name === "" || p.name === "未命名模板")
+    );
+    if (unnamedPrompt) {
+      const autoName = getNextVersionName();
+      onChange({ id: unnamedPrompt.id, name: autoName });
+      onSelect(unnamedPrompt.id);
+      setEditingId(unnamedPrompt.id);
+      setDraftContent("");
+    }
+  }, [prompts, activeTab, getNextVersionName, onChange, onSelect]);
+
   // 切换分类
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
@@ -98,24 +113,9 @@ export function PromptStorageView({
     }
   };
 
-  // 新建提示词 - 自动生成 V1, V2...
+  // 新建提示词 - 自动生成 V1, V2...（由 useEffect 处理命名）
   const handleNewPrompt = () => {
-    const autoName = getNextVersionName();
-    // 先调用 onNew 创建空提示词
     onNew(activeTab);
-    // 在下一个 tick 中找到新创建的提示词并命名
-    requestAnimationFrame(() => {
-      const newPrompt = prompts.find((p) =>
-        p.category === activeTab &&
-        (p.name === "" || p.name === "未命名模板")
-      );
-      if (newPrompt) {
-        onChange({ id: newPrompt.id, name: autoName });
-        onSelect(newPrompt.id);
-        setEditingId(newPrompt.id);
-        setDraftContent("");
-      }
-    });
   };
 
   // 删除提示词
