@@ -1,5 +1,5 @@
 import type { NavKey } from "../types";
-import { loadBundle, saveBundle, PERSISTENCE_KEY } from "../lib/storage";
+import { PERSISTENCE_KEY } from "../lib/storage";
 
 const ITEMS: { key: NavKey; label: string; icon: string }[] = [
   { key: "dialogue", label: "原始对话测试", icon: "💬" },
