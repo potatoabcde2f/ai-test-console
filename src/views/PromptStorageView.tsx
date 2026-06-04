@@ -326,6 +326,13 @@ export function PromptStorageView({
               <div
                 key={p.id}
                 onClick={() => {
+                  // 切换前删除未提交的当前版本（systemPrompt为空）
+                  if (activeId && activeId !== p.id) {
+                    const currentPrompt = prompts.find((cp) => cp.id === activeId && cp.category === activeTab);
+                    if (currentPrompt && (!currentPrompt.systemPrompt || currentPrompt.systemPrompt === "")) {
+                      onDelete(currentPrompt.id);
+                    }
+                  }
                   onSelect(p.id);
                   setEditingId(null);
                   setEditingPromptName(null);
