@@ -45,9 +45,6 @@ export function PromptStorageView({
     return prompts.find((p) => p.id === activeId && p.category === activeTab);
   }, [prompts, activeId, activeTab]);
 
-  // 当前分类
-  const activeCategory = categories.find((c) => c.id === activeTab);
-
   // 生成下一个版本号 V1, V2...
   const getNextVersionName = useCallback(() => {
     const versionRegex = /^V(\d+)$/;
@@ -305,34 +302,14 @@ export function PromptStorageView({
           flexDirection: "column",
           width: "100%"
         }}>
-          {/* 顶部工具栏 */}
-          <div style={{
-            padding: "12px 16px",
-            borderBottom: "1px solid var(--border)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center"
-          }}>
-            <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>
-              {activeCategory?.name}
-            </span>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={handleNewPrompt}
-              style={{ fontSize: "0.75rem", padding: "4px 10px" }}
-            >
-              + 新建
-            </button>
-          </div>
-
-          {/* 横向版本列表 */}
+          {/* 横向版本列表 - 顶部直接是版本 */}
           <div style={{
             display: "flex",
             gap: 8,
             padding: "12px 16px",
             borderBottom: "1px solid var(--border)",
-            background: "var(--bg-subtle)"
+            background: "var(--bg-subtle)",
+            alignItems: "center"
           }}>
             {filteredPrompts.map((p) => (
               <div
@@ -383,6 +360,15 @@ export function PromptStorageView({
                 )}
               </div>
             ))}
+            {/* 新建按钮 */}
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleNewPrompt}
+              style={{ fontSize: "0.75rem", padding: "6px 12px", marginLeft: 8 }}
+            >
+              + 新建
+            </button>
           </div>
 
           {/* 提示词内容区域 */}
