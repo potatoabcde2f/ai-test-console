@@ -92,23 +92,31 @@ export function DialogueTestView({
   externalTags,
   setExternalTags,
 }: APIVisualizerViewProps) {
-  // 使用外部状态或内部状态
+  // 使用 ref 跟踪最新状态
   const [internalMessages, setInternalMessages] = useState<Message[]>([]);
-  const messages = externalMessages !== undefined ? externalMessages : internalMessages;
-  const setMessages: React.Dispatch<React.SetStateAction<Message[]>> = (value) => {
-    if (setExternalMessages) {
-      if (typeof value === 'function') {
-        // 获取最新状态
-        const currentMessages = externalMessages !== undefined ? externalMessages : internalMessages;
-        const newValue = (value as Function)(currentMessages);
+  const messagesRef = useRef<Message[]>(externalMessages !== undefined ? externalMessages : internalMessages);
+  const messages = messagesRef.current;
+
+  useEffect(() => {
+    messagesRef.current = externalMessages !== undefined ? externalMessages : internalMessages;
+  }, [externalMessages, internalMessages]);
+
+  const setMessages = useCallback((value: React.SetStateAction<Message[]>) => {
+    if (typeof value === 'function') {
+      const newValue = (value as (prev: Message[]) => Message[])(messagesRef.current);
+      messagesRef.current = newValue;
+      if (setExternalMessages) {
         setExternalMessages(newValue);
-      } else {
+      }
+      setInternalMessages(newValue);
+    } else {
+      messagesRef.current = value;
+      if (setExternalMessages) {
         setExternalMessages(value);
       }
-    } else {
       setInternalMessages(value);
     }
-  };
+  }, [setExternalMessages]);
 
   const [internalChatId, setInternalChatId] = useState<string>("");
   const chatId = externalChatId !== undefined ? externalChatId : internalChatId;
