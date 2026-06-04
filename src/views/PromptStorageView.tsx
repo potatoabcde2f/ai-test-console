@@ -1,6 +1,5 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import type { PromptTemplate, PromptCategoryConfig } from "../types";
-import { PromptPanel } from "../components/PromptPanel";
 import { uid } from "../lib/ids";
 
 interface Props {
@@ -32,14 +31,17 @@ export function PromptStorageView({
   onChangeCategories,
 }: Props) {
   const [activeTab, setActiveTab] = useState<string>(categories[0]?.id ?? "");
-  const [viewMode, setViewMode] = useState<"list" | "detail" | "categories">("list");
-  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftContent, setDraftContent] = useState("");
+  const [showCategoryManage, setShowCategoryManage] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [newCategoryDesc, setNewCategoryDesc] = useState("");
-  const [autoEditPromptId, setAutoEditPromptId] = useState<string | null>(null);
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
 
-  // 过滤当前分类的提示词
-  const filteredPrompts = prompts.filter((p) => p.category === activeTab);
+  // 当前分类的提示词
+  const filteredPrompts = useMemo(() =>
+    prompts.filter((p) => p.category === activeTab),
+    [prompts, activeTab]
+  );
 
   // 当前选中的提示词
   const activePrompt = prompts.find((p) => p.id === activeId);
@@ -47,53 +49,80 @@ export function PromptStorageView({
   // 当前分类
   const activeCategory = categories.find((c) => c.id === activeTab);
 
-  // 切换 Tab
+  // 切换分类
   const handleTabChange = (tabId: string) => {
     setActiveTab(tabId);
-    setViewMode("list");
     const firstInTab = prompts.find((p) => p.category === tabId);
     if (firstInTab) {
       onSelect(firstInTab.id);
     }
+    setEditingId(null);
   };
 
-  // 查看详情
-  const handleViewDetail = (id: string) => {
-    onSelect(id);
-    setAutoEditPromptId(null);
-    setViewMode("detail");
+  // 开始编辑
+  const handleEdit = () => {
+    if (activePrompt) {
+      setEditingId(activePrompt.id);
+      setDraftContent(activePrompt.systemPrompt);
+    }
   };
 
-  // 新建提示词 - 创建后直接进入详情视图并打开编辑
+  // 重置
+  const handleReset = () => {
+    if (activePrompt) {
+      setDraftContent(activePrompt.systemPrompt);
+    }
+  };
+
+  // 使用当前版本（取消编辑）
+  const handleUseCurrent = () => {
+    setEditingId(null);
+    setDraftContent("");
+  };
+
+  // 提交保存
+  const handleSubmit = () => {
+    if (editingId && draftContent.trim()) {
+      onChange({ id: editingId, systemPrompt: draftContent.trim() });
+      setEditingId(null);
+      setDraftContent("");
+    }
+  };
+
+  // 新建提示词
   const handleNewPrompt = () => {
     const prevIds = new Set(prompts.map((p) => p.id));
     onNew(activeTab);
-    // 找到新创建的提示词（ID 在之前不存在的）
     setTimeout(() => {
       const newPrompt = prompts.find((p) => !prevIds.has(p.id));
       if (newPrompt) {
         onSelect(newPrompt.id);
-        setAutoEditPromptId(newPrompt.id);
-        setViewMode("detail");
+        setEditingId(newPrompt.id);
+        setDraftContent(newPrompt.systemPrompt);
       }
     }, 0);
   };
 
-  // 添加新分类
+  // 删除提示词
+  const handleDeletePrompt = (id: string) => {
+    if (window.confirm("确定删除这条提示词吗？")) {
+      onDelete(id);
+    }
+  };
+
+  // 添加分类
   const handleAddCategory = () => {
     const name = newCategoryName.trim();
     if (!name) return;
     const newCategory: PromptCategoryConfig = {
       id: uid("cat"),
       name,
-      desc: newCategoryDesc.trim(),
+      desc: "",
       createdAt: Date.now(),
     };
     onChangeCategories([...categories, newCategory]);
     setNewCategoryName("");
-    setNewCategoryDesc("");
     setActiveTab(newCategory.id);
-    setViewMode("list");
   };
 
   // 删除分类
@@ -113,329 +142,321 @@ export function PromptStorageView({
     }
   };
 
-  // 更新分类
-  const handleUpdateCategory = (categoryId: string, name: string, desc: string) => {
+  // 重命名分类
+  const handleRenameCategory = (categoryId: string, newName: string) => {
     onChangeCategories(
-      categories.map((c) => (c.id === categoryId ? { ...c, name, desc } : c))
+      categories.map((c) => (c.id === categoryId ? { ...c, name: newName } : c))
     );
     setEditingCategory(null);
   };
 
-  if (viewMode === "categories") {
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>板块管理</h2>
-          <button type="button" className="btn" onClick={() => setViewMode("list")}>
-            ← 返回提示词列表
-          </button>
-        </div>
-
-        {/* 添加新板块 */}
-        <div className="panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ fontWeight: 600 }}>添加新板块</div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input
-              className="input"
-              placeholder="板块名称"
-              value={newCategoryName}
-              onChange={(e) => setNewCategoryName(e.target.value)}
-              style={{ flex: 1, minWidth: 150 }}
-            />
-            <input
-              className="input"
-              placeholder="板块描述"
-              value={newCategoryDesc}
-              onChange={(e) => setNewCategoryDesc(e.target.value)}
-              style={{ flex: 2, minWidth: 200 }}
-            />
-            <button type="button" className="btn btn-primary" onClick={handleAddCategory}>
-              ＋ 添加板块
-            </button>
-          </div>
-        </div>
-
-        {/* 板块列表 */}
-        <div className="panel" style={{ flex: 1, overflow: "auto", padding: "1rem" }}>
-          <div style={{ fontWeight: 600, marginBottom: 12 }}>现有板块</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {categories.map((cat) => {
-              const count = prompts.filter((p) => p.category === cat.id).length;
-              const isEditing = editingCategory === cat.id;
-
-              if (isEditing) {
-                return (
-                  <div
-                    key={cat.id}
-                    className="panel"
-                    style={{ padding: "0.75rem", display: "flex", gap: 8, alignItems: "center" }}
-                  >
-                    <input
-                      className="input"
-                      defaultValue={cat.name}
-                      onBlur={(e) => handleUpdateCategory(cat.id, e.target.value, cat.desc)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleUpdateCategory(cat.id, e.currentTarget.value, cat.desc);
-                        }
-                        if (e.key === "Escape") {
-                          setEditingCategory(null);
-                        }
-                      }}
-                      autoFocus
-                      style={{ flex: 1 }}
-                    />
-                    <input
-                      className="input"
-                      defaultValue={cat.desc}
-                      onBlur={(e) => handleUpdateCategory(cat.id, cat.name, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") {
-                          handleUpdateCategory(cat.id, cat.name, e.currentTarget.value);
-                        }
-                        if (e.key === "Escape") {
-                          setEditingCategory(null);
-                        }
-                      }}
-                      style={{ flex: 2 }}
-                    />
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  key={cat.id}
-                  className="panel"
-                  style={{
-                    padding: "0.75rem",
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => {
-                    setActiveTab(cat.id);
-                    setViewMode("list");
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600 }}>{cat.name}</div>
-                    <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{cat.desc}</div>
-                  </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        padding: "2px 8px",
-                        borderRadius: 10,
-                        background: "var(--border)",
-                        color: "var(--text-muted)",
-                      }}
-                    >
-                      {count} 条
-                    </span>
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ fontSize: "0.7rem", padding: "2px 8px" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setEditingCategory(cat.id);
-                      }}
-                    >
-                      编辑
-                    </button>
-                    <button
-                      type="button"
-                      className="btn"
-                      style={{ fontSize: "0.7rem", padding: "2px 8px", color: "#dc2626" }}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteCategory(cat.id);
-                      }}
-                    >
-                      删除
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
       {/* 顶部 Tab 导航 */}
-      <div style={{ borderBottom: "1px solid var(--border)", paddingBottom: 8 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>提示词存储</h2>
-          <button type="button" className="btn" onClick={() => setViewMode("categories")}>
-            管理板块
-          </button>
-        </div>
-        <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+      <div style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        padding: "12px 16px",
+        borderBottom: "1px solid var(--border)",
+        background: "var(--bg-panel)"
+      }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {categories.map((cat) => {
             const isActive = activeTab === cat.id;
-            const count = prompts.filter((p) => p.category === cat.id).length;
             return (
               <button
                 key={cat.id}
                 type="button"
                 onClick={() => handleTabChange(cat.id)}
                 style={{
-                  padding: "0.5rem 1rem",
-                  border: "1px solid",
-                  borderColor: isActive ? "var(--accent)" : "var(--border)",
-                  borderRadius: "6px 6px 0 0",
-                  borderBottom: isActive ? "2px solid var(--accent)" : "1px solid var(--border)",
-                  background: isActive ? "var(--accent-soft)" : "var(--bg-subtle)",
-                  color: isActive ? "var(--accent)" : "var(--text)",
-                  fontWeight: isActive ? 600 : 500,
+                  padding: "6px 14px",
+                  border: "none",
+                  borderRadius: 6,
+                  background: isActive ? "var(--accent)" : "transparent",
+                  color: isActive ? "#fff" : "var(--text)",
                   fontSize: "0.85rem",
+                  fontWeight: isActive ? 500 : 400,
                   cursor: "pointer",
-                  position: "relative",
-                  top: isActive ? 1 : 0,
+                  transition: "all 0.15s",
                 }}
               >
                 {cat.name}
-                <span
-                  style={{
-                    marginLeft: 6,
-                    fontSize: "0.75rem",
-                    padding: "1px 6px",
-                    borderRadius: 10,
-                    background: isActive ? "var(--accent)" : "var(--border)",
-                    color: isActive ? "#fff" : "var(--text-muted)",
-                  }}
-                >
-                  {count}
-                </span>
               </button>
             );
           })}
         </div>
-        <p style={{ margin: "8px 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          {activeCategory?.desc ?? "请选择板块"}
-        </p>
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={() => setShowCategoryManage(!showCategoryManage)}
+          style={{ fontSize: "0.8rem" }}
+        >
+          {showCategoryManage ? "完成" : "管理板块"}
+        </button>
       </div>
 
-      {/* 内容区 */}
-      {viewMode === "list" ? (
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12 }}>
-          {/* 新建按钮 */}
-          <div style={{ display: "flex", justifyContent: "flex-end" }}>
-            <button type="button" className="btn btn-primary" onClick={handleNewPrompt}>
-              ＋ 新建{activeCategory?.name ?? "提示词"}
+      {/* 板块管理面板 */}
+      {showCategoryManage && (
+        <div style={{
+          padding: "12px 16px",
+          borderBottom: "1px solid var(--border)",
+          background: "var(--bg-subtle)"
+        }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
+            <input
+              className="input"
+              placeholder="新板块名称"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+              style={{ flex: 1, maxWidth: 200 }}
+            />
+            <button type="button" className="btn btn-primary" onClick={handleAddCategory}>
+              添加
             </button>
           </div>
-
-          {/* 版本列表 */}
-          <div className="panel" style={{ flex: 1, overflow: "auto", padding: "1rem" }}>
-            {filteredPrompts.length === 0 ? (
-              <div style={{ textAlign: "center", padding: "3rem", color: "var(--text-muted)" }}>
-                <p>暂无{activeCategory?.name ?? "提示词"}</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {categories.map((cat) => (
+              <div
+                key={cat.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                  padding: "4px 8px",
+                  background: "var(--bg-panel)",
+                  borderRadius: 4,
+                  border: "1px solid var(--border)"
+                }}
+              >
+                {editingCategory === cat.id ? (
+                  <input
+                    className="input"
+                    defaultValue={cat.name}
+                    onBlur={(e) => handleRenameCategory(cat.id, e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleRenameCategory(cat.id, e.currentTarget.value)}
+                    autoFocus
+                    style={{ width: 80, fontSize: "0.8rem" }}
+                  />
+                ) : (
+                  <span style={{ fontSize: "0.8rem" }}>{cat.name}</span>
+                )}
                 <button
                   type="button"
-                  className="btn btn-primary"
-                  style={{ marginTop: 12 }}
-                  onClick={handleNewPrompt}
+                  className="btn"
+                  onClick={() => setEditingCategory(cat.id)}
+                  style={{ fontSize: "0.7rem", padding: "2px 6px" }}
                 >
-                  创建第一个
+                  重命名
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-danger"
+                  onClick={() => handleDeleteCategory(cat.id)}
+                  style={{ fontSize: "0.7rem", padding: "2px 6px" }}
+                >
+                  删除
                 </button>
               </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {filteredPrompts
-                  .sort((a, b) => b.updatedAt - a.updatedAt)
-                  .map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => handleViewDetail(p.id)}
-                      style={{
-                        padding: "1rem",
-                        border: "1px solid var(--border)",
-                        borderRadius: 8,
-                        background: activeId === p.id ? "var(--accent-soft)" : "var(--bg)",
-                        cursor: "pointer",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 600, fontSize: "0.95rem", marginBottom: 4 }}>
-                          {p.name}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: "0.8rem",
-                            color: "var(--text-muted)",
-                            display: "flex",
-                            gap: 12,
-                            alignItems: "center",
-                          }}
-                        >
-                          <span>✏️ 编辑于 {formatTime(p.updatedAt)}</span>
-                          <span style={{ color: "var(--accent)" }}>点击查看详情</span>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        className="btn"
-                        style={{ flexShrink: 0 }}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewDetail(p.id);
-                        }}
-                      >
-                        查看详情
-                      </button>
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        /* 详情视图 - 使用 PromptPanel */
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
-          {/* 返回按钮 */}
-          <div style={{ display: "flex", gap: 8 }}>
-            <button type="button" className="btn" onClick={() => { setAutoEditPromptId(null); setViewMode("list"); }}>
-              ← 返回列表
-            </button>
-          </div>
-
-          {/* 详情面板 */}
-          <div style={{ flex: 1, minHeight: 0 }}>
-            {activePrompt && activePrompt.category === activeTab ? (
-              <PromptPanel
-                prompts={filteredPrompts}
-                categories={categories}
-                activeId={activeId}
-                onSelect={onSelect}
-                onChange={onChange}
-                onDuplicate={onDuplicate}
-                onDelete={(id: string) => {
-                  onDelete(id);
-                  if (filteredPrompts.length <= 1) {
-                    setViewMode("list");
-                  }
-                }}
-                autoEdit={autoEditPromptId === activeId}
-              />
-            ) : (
-              <div className="panel" style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
-                请选择一个提示词查看详情
-              </div>
-            )}
+            ))}
           </div>
         </div>
       )}
+
+      {/* 主内容区 */}
+      <div style={{ display: "flex", flex: 1, minHeight: 0, overflow: "hidden" }}>
+        {/* 左侧列表 */}
+        <div style={{
+          width: 240,
+          borderRight: "1px solid var(--border)",
+          background: "var(--bg-panel)",
+          display: "flex",
+          flexDirection: "column"
+        }}>
+          <div style={{
+            padding: "12px 16px",
+            borderBottom: "1px solid var(--border)",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }}>
+            <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+              {activeCategory?.name}
+            </span>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleNewPrompt}
+              style={{ fontSize: "0.75rem", padding: "4px 10px" }}
+            >
+              + 新建
+            </button>
+          </div>
+          <div style={{ flex: 1, overflow: "auto", padding: 8 }}>
+            {filteredPrompts.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => {
+                  onSelect(p.id);
+                  setEditingId(null);
+                }}
+                style={{
+                  padding: "10px 12px",
+                  marginBottom: 4,
+                  borderRadius: 6,
+                  cursor: "pointer",
+                  background: activeId === p.id ? "var(--accent-soft)" : "transparent",
+                  borderLeft: activeId === p.id ? "3px solid var(--accent)" : "3px solid transparent",
+                  transition: "all 0.15s",
+                }}
+              >
+                <div style={{
+                  fontWeight: activeId === p.id ? 500 : 400,
+                  fontSize: "0.85rem",
+                  marginBottom: 4,
+                  color: activeId === p.id ? "var(--accent)" : "var(--text)"
+                }}>
+                  {p.name}
+                </div>
+                <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                  {formatTime(p.updatedAt)}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* 右侧详情区 */}
+        <div style={{ flex: 1, padding: 20, background: "var(--bg)", overflow: "auto" }}>
+          {activePrompt ? (
+            <div style={{ maxWidth: 800, margin: "0 auto" }}>
+              {/* 提示词标题 */}
+              <div style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: 16
+              }}>
+                <input
+                  className="input"
+                  value={activePrompt.name}
+                  onChange={(e) => onChange({ id: activePrompt.id, name: e.target.value })}
+                  style={{
+                    fontSize: "1.1rem",
+                    fontWeight: 600,
+                    flex: 1,
+                    marginRight: 12
+                  }}
+                />
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    type="button"
+                    className="btn"
+                    onClick={() => onDuplicate(activePrompt.id)}
+                  >
+                    复制
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={() => handleDeletePrompt(activePrompt.id)}
+                  >
+                    删除
+                  </button>
+                </div>
+              </div>
+
+              {/* 提示词内容卡片 */}
+              <div style={{
+                background: "#fff",
+                borderRadius: 8,
+                border: "1px solid var(--border)",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.04)",
+                marginBottom: 16
+              }}>
+                {editingId === activePrompt.id ? (
+                  <textarea
+                    className="textarea-field"
+                    value={draftContent}
+                    onChange={(e) => setDraftContent(e.target.value)}
+                    style={{
+                      width: "100%",
+                      minHeight: 400,
+                      padding: 16,
+                      border: "none",
+                      borderRadius: 8,
+                      fontSize: "0.9rem",
+                      lineHeight: 1.6,
+                      fontFamily: 'var(--font-mono), ui-monospace, monospace',
+                      resize: "vertical",
+                      outline: "none"
+                    }}
+                  />
+                ) : (
+                  <div style={{
+                    padding: 16,
+                    minHeight: 400,
+                    fontSize: "0.9rem",
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                    fontFamily: 'var(--font-mono), ui-monospace, monospace',
+                    color: "var(--text)"
+                  }}>
+                    {activePrompt.systemPrompt}
+                  </div>
+                )}
+              </div>
+
+              {/* 底部按钮 */}
+              <div style={{ display: "flex", justifyContent: "flex-end", gap: 12 }}>
+                {editingId === activePrompt.id ? (
+                  <>
+                    <button
+                      type="button"
+                      className="btn"
+                      onClick={handleReset}
+                    >
+                      重置
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={handleUseCurrent}
+                    >
+                      使用当前版本
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      onClick={handleSubmit}
+                    >
+                      提交
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    onClick={handleEdit}
+                  >
+                    编辑
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              height: "100%",
+              color: "var(--text-muted)"
+            }}>
+              请选择一条提示词
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
