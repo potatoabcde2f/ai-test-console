@@ -360,6 +360,7 @@ export function QuestionBankView({ questionBank, onChange }: Props) {
                       <span
                         style={{
                           flex: 1,
+                          fontSize: "0.85rem",
                           fontWeight: isActive ? 600 : 500,
                           color: isActive ? "var(--accent)" : "var(--text)",
                         }}

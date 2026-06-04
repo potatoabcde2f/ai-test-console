@@ -1,13 +1,13 @@
 import type { NavKey } from "../types";
 
 const ITEMS: { key: NavKey; label: string; icon: string }[] = [
-  { key: "dialogue", label: "原始对话测试", icon: "◆" },
-  { key: "prompts", label: "提示词存储", icon: "≡" },
-  { key: "conversations", label: "对话结果存储", icon: "☰" },
-  { key: "images", label: "生图结果存储", icon: "▣" },
-  { key: "batchTest", label: "批量测试", icon: "▸" },
-  { key: "intentTest", label: "意图识别测试", icon: "◎" },
-  { key: "questionBank", label: "问题库管理", icon: "?" },
+  { key: "dialogue", label: "原始对话测试", icon: "💬" },
+  { key: "prompts", label: "提示词存储", icon: "📝" },
+  { key: "conversations", label: "对话结果存储", icon: "📂" },
+  { key: "images", label: "生图结果存储", icon: "🖼️" },
+  { key: "batchTest", label: "批量测试", icon: "⚡" },
+  { key: "intentTest", label: "意图识别测试", icon: "🎯" },
+  { key: "questionBank", label: "问题库管理", icon: "📚" },
 ];
 
 interface Props {
@@ -20,7 +20,6 @@ export function Sidebar({ active, onNavigate }: Props) {
     <aside className="sidebar">
       <div className="sidebar-brand">
         <h1>AI 测试后台</h1>
-        <p>对话 · 生图白盒 · 提示词版本 · OMS 存档 · 多模型对比</p>
       </div>
       <nav style={{ flex: 1 }}>
         {ITEMS.map((it) => (
@@ -30,8 +29,8 @@ export function Sidebar({ active, onNavigate }: Props) {
             className={`nav-btn${active === it.key ? " active" : ""}`}
             onClick={() => onNavigate(it.key)}
           >
-            <span style={{ opacity: 0.75, fontSize: "0.75rem" }}>{it.icon}</span>
-            {it.label}
+            <span style={{ fontSize: "1.1rem", lineHeight: 1 }}>{it.icon}</span>
+            <span>{it.label}</span>
           </button>
         ))}
       </nav>

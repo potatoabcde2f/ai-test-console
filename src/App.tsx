@@ -31,6 +31,7 @@ import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { uid } from "./lib/ids";
 import { loadBundle, saveBundle } from "./lib/storage";
 import { DEFAULT_USER_PROFILE } from "./lib/userProfile";
+import { DEFAULT_QUESTION_BANK } from "./lib/defaultQuestionBank";
 
 const defaultEval = (): Evaluation => ({
   verdict: "pending",
@@ -164,7 +165,11 @@ export function App() {
 
   const [questionBank, setQuestionBank] = useState<QuestionBank>(() => {
     const b = loadBundle();
-    return b?.questionBank ?? { categories: [] };
+    // 如果没有数据或分类为空，使用默认数据
+    if (!b?.questionBank || b.questionBank.categories.length === 0) {
+      return DEFAULT_QUESTION_BANK;
+    }
+    return b.questionBank;
   });
 
   const [batchTestTasks, setBatchTestTasks] = useState<BatchTestTask[]>(() => {
@@ -260,12 +265,10 @@ export function App() {
     (id: string) => {
       setPrompts((prev) => {
         if (prev.length <= 1) return prev;
-        const next = prev.filter((p) => p.id !== id);
-        if (!next.some((p) => p.id === activePromptId)) setActivePromptId(next[0]?.id ?? "");
-        return next;
+        return prev.filter((p) => p.id !== id);
       });
     },
-    [activePromptId]
+    []
   );
 
   const updateConversationEval = useCallback((id: string, ev: Evaluation) => {
@@ -348,7 +351,6 @@ export function App() {
               datasets={intentTestDatasets}
               onChangeDatasets={setIntentTestDatasets}
               questionBank={questionBank}
-              prompts={prompts}
             />
           )}
         </div>

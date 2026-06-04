@@ -47,9 +47,6 @@ export function ConversationResultsView({ conversations, onUpdate, onDelete }: P
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
       <div>
         <h2 style={{ margin: 0, fontSize: "1.1rem" }}>对话结果存储</h2>
-        <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          OMS 风格列表；点选一行查看单条对话、修改评分与优化点。
-        </p>
       </div>
       <div className="table-wrap scroll-y" style={{ flex: 1 }}>
         <table className="data-table">

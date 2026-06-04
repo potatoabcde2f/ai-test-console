@@ -4,10 +4,7 @@ import type {
   IntentTestItem,
   IntentTestDataset,
   QuestionBank,
-  PromptTemplate,
 } from "../types";
-import { MODEL_PRESETS } from "../lib/models";
-import { mockAssistantReply } from "../lib/mockAI";
 import { uid } from "../lib/ids";
 
 interface Props {
@@ -16,12 +13,22 @@ interface Props {
   datasets: IntentTestDataset[];
   onChangeDatasets: (updater: (prev: IntentTestDataset[]) => IntentTestDataset[]) => void;
   questionBank: QuestionBank;
-  prompts: PromptTemplate[];
 }
 
 const EMPTY_BANK: QuestionBank = {
   categories: [],
 };
+
+// 意图类型映射
+const INTENT_MAP: Record<string, string> = {
+  "1": "生图需求",
+  "2": "通用穿搭问答",
+  "3": "产品介绍相关",
+  "4": "穿搭图片推荐",
+};
+
+const AI_STYLIST_API_URL = "/api/ai-stylist/send-message";
+const DEFAULT_BASE_URL = "http://192.168.15.62:8082";
 
 export function IntentTestView({
   tasks,
@@ -29,12 +36,11 @@ export function IntentTestView({
   datasets,
   onChangeDatasets,
   questionBank,
-  prompts,
 }: Props) {
   const bank = questionBank ?? EMPTY_BANK;
 
-  // 视图模式: "datasets" | "tasks" | "createDataset" | "createTask" | "datasetDetail" | "taskDetail"
-  const [viewMode, setViewMode] = useState<"datasets" | "tasks" | "createDataset" | "createTask" | "datasetDetail" | "taskDetail">("datasets");
+  // 视图模式
+  const [viewMode, setViewMode] = useState<"datasets" | "tasks" | "createDataset" | "createTask" | "datasetDetail" | "taskDetail" | "running">("datasets");
 
   // 当前选中的评测集/任务ID
   const [activeDatasetId, setActiveDatasetId] = useState<string | null>(null);
@@ -44,54 +50,46 @@ export function IntentTestView({
   const [editingDatasetId, setEditingDatasetId] = useState<string | null>(null);
   const [datasetFormName, setDatasetFormName] = useState("");
   const [datasetFormDesc, setDatasetFormDesc] = useState("");
-  const [datasetFormIntentTypes, setDatasetFormIntentTypes] = useState<string[]>(["查询", "购买", "投诉", "咨询", "其他"]);
   const [datasetFormItems, setDatasetFormItems] = useState<IntentTestItem[]>([]);
-  const [newIntentType, setNewIntentType] = useState("");
   const [importCategoryId, setImportCategoryId] = useState("");
 
-  // 任务创建状态
+  // 任务创建/运行状态
   const [taskFormName, setTaskFormName] = useState("");
-  const [taskFormPromptId, setTaskFormPromptId] = useState("");
-  const [taskFormModelId, setTaskFormModelId] = useState(MODEL_PRESETS[0]?.id ?? "");
+  const [taskFormModelId, setTaskFormModelId] = useState("");
   const [taskFormDatasetId, setTaskFormDatasetId] = useState("");
+  const [taskFormDetectPrompt, setTaskFormDetectPrompt] = useState("");
 
-  // 任务运行状态
-  const [runningItemId, setRunningItemId] = useState<string | null>(null);
+  // 运行状态
+  const [, setIsRunning] = useState(false);
+  const [runningProgress, setRunningProgress] = useState({ current: 0, total: 0 });
 
   // 当前数据
   const activeDataset = datasets.find((d) => d.id === activeDatasetId);
   const activeTask = tasks.find((t) => t.id === activeTaskId);
 
-  // ==================== 评测集管理 ====================
+  // ==================== 数据集管理 ====================
 
-  // 开始创建评测集
   const startCreateDataset = () => {
     setEditingDatasetId(null);
     setDatasetFormName("");
     setDatasetFormDesc("");
-    setDatasetFormIntentTypes(["查询", "购买", "投诉", "咨询", "其他"]);
     setDatasetFormItems([]);
-    setNewIntentType("");
     setImportCategoryId("");
     setViewMode("createDataset");
   };
 
-  // 开始编辑评测集
   const startEditDataset = (dataset: IntentTestDataset) => {
     setEditingDatasetId(dataset.id);
     setDatasetFormName(dataset.name);
     setDatasetFormDesc(dataset.description ?? "");
-    setDatasetFormIntentTypes([...dataset.intentTypes]);
     setDatasetFormItems(dataset.items.map((item) => ({ ...item })));
-    setNewIntentType("");
     setImportCategoryId("");
     setViewMode("createDataset");
   };
 
-  // 保存评测集
   const saveDataset = () => {
     if (!datasetFormName.trim()) {
-      window.alert("请填写评测集名称");
+      window.alert("请填写数据集名称");
       return;
     }
     if (datasetFormItems.length === 0) {
@@ -101,7 +99,6 @@ export function IntentTestView({
 
     const now = Date.now();
     if (editingDatasetId) {
-      // 更新现有评测集
       onChangeDatasets((prev) =>
         prev.map((d) =>
           d.id === editingDatasetId
@@ -109,7 +106,6 @@ export function IntentTestView({
                 ...d,
                 name: datasetFormName.trim(),
                 description: datasetFormDesc.trim(),
-                intentTypes: datasetFormIntentTypes,
                 items: datasetFormItems,
                 updatedAt: now,
               }
@@ -117,12 +113,11 @@ export function IntentTestView({
         )
       );
     } else {
-      // 创建新评测集
       const newDataset: IntentTestDataset = {
         id: uid("itd"),
         name: datasetFormName.trim(),
         description: datasetFormDesc.trim(),
-        intentTypes: datasetFormIntentTypes,
+        intentTypes: ["1", "2", "3", "4"],
         items: datasetFormItems,
         createdAt: now,
         updatedAt: now,
@@ -132,19 +127,12 @@ export function IntentTestView({
     setViewMode("datasets");
   };
 
-  // 删除评测集
   const deleteDataset = (id: string) => {
-    const relatedTasks = tasks.filter((t) => t.items.some((i) => datasets.find((d) => d.id === id)?.items.some((di) => di.id === i.id)));
-    if (relatedTasks.length > 0) {
-      if (!window.confirm(`该评测集已被 ${relatedTasks.length} 个任务使用，确定删除吗？`)) return;
-    } else {
-      if (!window.confirm("确定删除此评测集？")) return;
-    }
+    if (!window.confirm("确定删除此数据集？")) return;
     onChangeDatasets((prev) => prev.filter((d) => d.id !== id));
     if (activeDatasetId === id) setActiveDatasetId(null);
   };
 
-  // 从问题库导入到评测集
   const importFromQuestionBank = () => {
     if (!importCategoryId) {
       window.alert("请先选择问题分类");
@@ -165,7 +153,6 @@ export function IntentTestView({
     setImportCategoryId("");
   };
 
-  // 添加空评测项
   const addDatasetItem = () => {
     setDatasetFormItems((prev) => [
       ...prev,
@@ -173,51 +160,38 @@ export function IntentTestView({
     ]);
   };
 
-  // 更新评测项
   const updateDatasetItem = (id: string, field: "question" | "humanLabel", value: string) => {
     setDatasetFormItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, [field]: value } : item))
     );
   };
 
-  // 删除评测项
   const deleteDatasetItem = (id: string) => {
     setDatasetFormItems((prev) => prev.filter((item) => item.id !== id));
   };
 
-  // 添加意图类型
-  const addIntentType = () => {
-    const type = newIntentType.trim();
-    if (!type) return;
-    if (datasetFormIntentTypes.includes(type)) {
-      window.alert("该意图类型已存在");
-      return;
-    }
-    setDatasetFormIntentTypes((prev) => [...prev, type]);
-    setNewIntentType("");
-  };
+  // ==================== 任务管理 ====================
 
-  // 删除意图类型
-  const removeIntentType = (type: string) => {
-    setDatasetFormIntentTypes((prev) => prev.filter((t) => t !== type));
-  };
-
-  // ==================== 测试任务管理 ====================
-
-  // 开始创建任务
   const startCreateTask = () => {
     if (datasets.length === 0) {
       window.alert("请先创建评测集");
       return;
     }
-    setTaskFormName("");
-    setTaskFormPromptId(prompts[0]?.id ?? "");
-    setTaskFormModelId(MODEL_PRESETS[0]?.id ?? "");
+    // 自动生成名称：意图识别N
+    const existingNumbers = tasks
+      .map((t) => {
+        const match = t.name.match(/^意图识别(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter((n) => n > 0);
+    const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+    setTaskFormName(`意图识别${nextNumber}`);
+    setTaskFormModelId("");
     setTaskFormDatasetId(datasets[0]?.id ?? "");
+    setTaskFormDetectPrompt("");
     setViewMode("createTask");
   };
 
-  // 创建任务
   const createTask = () => {
     if (!taskFormName.trim()) {
       window.alert("请填写任务名称");
@@ -234,30 +208,27 @@ export function IntentTestView({
       return;
     }
 
-    const prompt = prompts.find((p) => p.id === taskFormPromptId);
-    if (!prompt) {
-      window.alert("所选提示词不存在");
-      return;
-    }
-
-    const task: IntentTestTask = {
+    const task: IntentTestTask & { baseUrl?: string; detectPrompt?: string } = {
       id: uid("itt"),
       name: taskFormName.trim(),
       status: "running",
-      items: dataset.items.map((item) => ({ ...item })), // 复制评测集数据
-      promptId: taskFormPromptId,
-      systemPrompt: prompt.systemPrompt,
+      items: dataset.items.map((item) => ({ ...item })),
+      promptId: "",
+      systemPrompt: taskFormDetectPrompt,
       modelId: taskFormModelId,
       progress: { current: 0, total: dataset.items.length },
       createdAt: Date.now(),
       updatedAt: Date.now(),
+      baseUrl: DEFAULT_BASE_URL,
     };
 
     onChangeTasks((prev) => [task, ...prev]);
-    setViewMode("tasks");
+    setActiveTaskId(task.id);
+    setViewMode("running");
+    // 自动开始运行
+    setTimeout(() => runTask(task, taskFormDetectPrompt), 100);
   };
 
-  // 删除任务
   const deleteTask = (id: string) => {
     if (!window.confirm("确定删除此测试任务？")) return;
     onChangeTasks((prev) => prev.filter((t) => t.id !== id));
@@ -267,113 +238,149 @@ export function IntentTestView({
     }
   };
 
-  // 运行单个评测项
-  const runItem = async (task: IntentTestTask, itemId: string) => {
-    const item = task.items.find((i) => i.id === itemId);
-    if (!item) return;
+  // ==================== 运行测试 ====================
 
-    setRunningItemId(itemId);
+  const runTask = async (task: IntentTestTask & { baseUrl?: string }, detectPromptOverride: string = "") => {
+    setIsRunning(true);
+    setRunningProgress({ current: 0, total: task.items.length });
 
-    try {
-      const model = MODEL_PRESETS.find((m) => m.id === task.modelId)!;
-      const result = await mockAssistantReply({
-        model,
-        systemPrompt: task.systemPrompt,
-        userProfile: "",
-        visibleMessages: [
-          {
-            id: uid("msg"),
-            role: "user",
-            content: item.question,
-            createdAt: Date.now(),
-          },
-        ],
-        fewShot: null,
-      });
+    const promptParams: Record<string, string> = {};
+    if (detectPromptOverride) {
+      promptParams.prompt_closet_chat_detect = detectPromptOverride;
+    }
 
-      const aiLabel = result.content.trim();
-      const isMatch = aiLabel === item.humanLabel;
+    for (let i = 0; i < task.items.length; i++) {
+      const item = task.items[i];
+      setRunningProgress({ current: i + 1, total: task.items.length });
 
+      // 更新状态为运行中
       onChangeTasks((prev) =>
         prev.map((t) => {
           if (t.id !== task.id) return t;
           return {
             ...t,
-            items: t.items.map((i) =>
-              i.id === itemId ? { ...i, aiLabel, isMatch } : i
+            items: t.items.map((it) =>
+              it.id === item.id ? { ...it, aiLabel: undefined, isMatch: undefined as boolean | undefined } : it
             ),
-            progress: {
-              current: t.items.filter((i) => i.aiLabel !== undefined).length,
-              total: t.items.length,
-            },
-            updatedAt: Date.now(),
           };
         })
       );
-    } catch (e) {
-      console.error(e);
-      window.alert("运行失败");
-    } finally {
-      setRunningItemId(null);
+
+      try {
+        const payload: Record<string, unknown> = {
+          prompt: item.question,
+          chat_svc: task.modelId,
+          debug: "model_debug",
+        };
+
+        if (Object.keys(promptParams).length > 0) {
+          payload.prompt_params = promptParams;
+        }
+
+        const apiUrl = task.baseUrl ? `${task.baseUrl}${AI_STYLIST_API_URL}` : AI_STYLIST_API_URL;
+
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        const data = await response.json();
+
+        if (data.status === 1 && data.data) {
+          const debugFlow = data.data.debug_flow || data.data.debugFlow || [];
+          const detectStep = debugFlow.find(
+            (step: { template?: string; output?: string }) => step.template === "closet_chat_detect"
+          );
+          const aiLabel = detectStep?.output?.trim() || null;
+          const isMatch = aiLabel ? aiLabel === item.humanLabel : undefined;
+
+          onChangeTasks((prev) =>
+            prev.map((t) => {
+              if (t.id !== task.id) return t;
+              return {
+                ...t,
+                items: t.items.map((it) =>
+                  it.id === item.id ? { ...it, aiLabel, isMatch } : it
+                ),
+                progress: {
+                  current: i + 1,
+                  total: task.items.length,
+                },
+                updatedAt: Date.now(),
+              };
+            })
+          );
+        } else {
+          throw new Error(data.msg || "API返回错误");
+        }
+      } catch (error) {
+        console.error("测试失败:", error);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
+
+    // 计算统计
+    const finalTask = tasks.find((t) => t.id === task.id);
+    if (finalTask) {
+      const matched = finalTask.items.filter((i) => i.isMatch).length;
+      const tested = finalTask.items.filter((i) => i.aiLabel).length;
+      const accuracy = tested > 0 ? Math.round((matched / tested) * 100) : 0;
+
+      onChangeTasks((prev) =>
+        prev.map((t) =>
+          t.id === task.id
+            ? {
+                ...t,
+                status: "completed",
+                summary: {
+                  totalItems: t.items.length,
+                  matchedCount: matched,
+                  failedCount: tested - matched,
+                  accuracy,
+                  endedAt: Date.now(),
+                },
+              }
+            : t
+        )
+      );
+    }
+
+    setIsRunning(false);
   };
 
-  // 运行所有未测试项
-  const runAllItems = async (task: IntentTestTask) => {
-    const untestedItems = task.items.filter((i) => !i.aiLabel);
-    if (untestedItems.length === 0) {
-      window.alert("所有评测项已完成");
-      return;
-    }
-
-    for (const item of untestedItems) {
-      await runItem(task, item.id);
-    }
-  };
-
-  // 结束任务
-  const endTask = (task: IntentTestTask) => {
-    const matchedCount = task.items.filter((i) => i.isMatch).length;
-    const failedCount = task.items.filter((i) => i.aiLabel && !i.isMatch).length;
-    const testedCount = matchedCount + failedCount;
-    const accuracy = testedCount > 0 ? Math.round((matchedCount / testedCount) * 100) : 0;
-
+  const rerunTask = (task: IntentTestTask & { baseUrl?: string }) => {
+    // 重置所有结果
     onChangeTasks((prev) =>
       prev.map((t) =>
         t.id === task.id
           ? {
               ...t,
-              status: "completed",
-              summary: {
-                totalItems: task.items.length,
-                matchedCount,
-                failedCount,
-                accuracy,
-                endedAt: Date.now(),
-              },
+              status: "running",
+              items: t.items.map((i) => ({ ...i, aiLabel: undefined, isMatch: undefined })),
+              summary: undefined,
             }
           : t
       )
     );
-    if (viewMode === "taskDetail") {
-      setViewMode("tasks");
-    }
+    setActiveTaskId(task.id);
+    setViewMode("running");
+    setTimeout(() => runTask(task), 100);
   };
-
-  // 辅助函数
-  const getModelLabel = (id: string) => MODEL_PRESETS.find((m) => m.id === id)?.label ?? id;
-  const getPromptLabel = (id: string) => prompts.find((p) => p.id === id)?.name ?? id;
 
   // ==================== 渲染 ====================
 
-  // 评测集列表视图
+  const getModelLabel = (id: string) => id || "默认模型";
+
+  // 数据集列表
   const renderDatasetsView = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: "1.1rem" }}>意图识别评测集</h2>
           <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-            创建和管理评测集，人工标注后可用于多次测试
+            创建和管理评测集，人工标注意图类型（1-4）
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -408,14 +415,7 @@ export function IntentTestView({
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <strong style={{ fontSize: "1rem" }}>{dataset.name}</strong>
-                  <span
-                    className="badge"
-                    style={{
-                      marginLeft: 12,
-                      background: "rgba(37,99,235,0.1)",
-                      color: "var(--accent)",
-                    }}
-                  >
+                  <span className="badge" style={{ marginLeft: 12, background: "rgba(37,99,235,0.1)", color: "var(--accent)" }}>
                     {dataset.items.length} 条
                   </span>
                 </div>
@@ -442,14 +442,6 @@ export function IntentTestView({
                   </button>
                 </div>
               </div>
-              {dataset.description && (
-                <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 8 }}>
-                  {dataset.description}
-                </div>
-              )}
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 8 }}>
-                意图类型: {dataset.intentTypes.join(" / ")}
-              </div>
             </div>
           ))
         )}
@@ -457,7 +449,7 @@ export function IntentTestView({
     </div>
   );
 
-  // 评测集编辑/创建视图
+  // 评测集编辑
   const renderDatasetEditView = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -468,7 +460,6 @@ export function IntentTestView({
       </div>
 
       <div className="panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 12, flex: 1, overflow: "auto" }}>
-        {/* 基本信息 */}
         <input
           className="input"
           placeholder="评测集名称"
@@ -482,41 +473,6 @@ export function IntentTestView({
           onChange={(e) => setDatasetFormDesc(e.target.value)}
         />
 
-        {/* 意图类型配置 */}
-        <div className="panel" style={{ padding: "0.75rem", background: "var(--bg-subtle)" }}>
-          <div className="label">意图类型定义</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-            {datasetFormIntentTypes.map((type) => (
-              <span
-                key={type}
-                className="chip"
-                style={{ display: "flex", alignItems: "center", gap: 4 }}
-              >
-                {type}
-                <button
-                  type="button"
-                  style={{ border: "none", background: "none", cursor: "pointer", color: "#dc2626", fontSize: "0.75rem" }}
-                  onClick={() => removeIntentType(type)}
-                >
-                  ×
-                </button>
-              </span>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              className="input"
-              placeholder="新增意图类型"
-              value={newIntentType}
-              onChange={(e) => setNewIntentType(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") addIntentType(); }}
-              style={{ flex: 1 }}
-            />
-            <button type="button" className="btn" onClick={addIntentType}>添加</button>
-          </div>
-        </div>
-
-        {/* 从问题库导入 */}
         <div className="panel" style={{ padding: "0.75rem", background: "var(--bg-subtle)" }}>
           <div className="label">从问题库导入</div>
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -533,35 +489,46 @@ export function IntentTestView({
                 </option>
               ))}
             </select>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={importFromQuestionBank}
-              disabled={!importCategoryId}
-            >
+            <button type="button" className="btn btn-primary" onClick={importFromQuestionBank} disabled={!importCategoryId}>
               导入
             </button>
           </div>
         </div>
 
-        {/* 评测集编辑表格 */}
         <div style={{ flex: 1, minHeight: 200 }}>
           <div className="label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span>评测项（共 {datasetFormItems.length} 条）</span>
             <button type="button" className="btn" style={{ fontSize: "0.75rem" }} onClick={addDatasetItem}>
-              ＋ 添加评测项
+              ＋ 添加
             </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 400, overflow: "auto" }}>
-            {/* 表头 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 150px 40px", gap: 8, padding: "8px", background: "var(--bg-subtle)", fontWeight: 600, fontSize: "0.8rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 120px 50px",
+                gap: 8,
+                padding: "8px",
+                background: "var(--bg-subtle)",
+                fontWeight: 600,
+                fontSize: "0.8rem",
+              }}
+            >
               <span>问题</span>
-              <span>人工标注意图</span>
+              <span>人工标注(1-4)</span>
               <span></span>
             </div>
-            {/* 表格行 */}
             {datasetFormItems.map((item) => (
-              <div key={item.id} style={{ display: "grid", gridTemplateColumns: "1fr 150px 40px", gap: 8, padding: "4px 8px", alignItems: "center" }}>
+              <div
+                key={item.id}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "1fr 120px 50px",
+                  gap: 8,
+                  padding: "4px 8px",
+                  alignItems: "center",
+                }}
+              >
                 <input
                   className="input"
                   placeholder="输入问题"
@@ -575,10 +542,11 @@ export function IntentTestView({
                   onChange={(e) => updateDatasetItem(item.id, "humanLabel", e.target.value)}
                   style={{ fontSize: "0.85rem" }}
                 >
-                  <option value="">请选择...</option>
-                  {datasetFormIntentTypes.map((type) => (
-                    <option key={type} value={type}>{type}</option>
-                  ))}
+                  <option value="">选择...</option>
+                  <option value="1">1-生图</option>
+                  <option value="2">2-通用</option>
+                  <option value="3">3-产品</option>
+                  <option value="4">4-推荐</option>
                 </select>
                 <button
                   type="button"
@@ -595,7 +563,7 @@ export function IntentTestView({
 
         <div style={{ display: "flex", gap: 8 }}>
           <button type="button" className="btn btn-primary" onClick={saveDataset}>
-            保存评测集
+            保存
           </button>
           <button type="button" className="btn btn-ghost" onClick={() => setViewMode("datasets")}>
             取消
@@ -605,7 +573,7 @@ export function IntentTestView({
     </div>
   );
 
-  // 评测集详情视图
+  // 评测集详情
   const renderDatasetDetailView = () => {
     if (!activeDataset) return null;
     return (
@@ -629,29 +597,39 @@ export function IntentTestView({
           </div>
         </div>
 
-        <div className="panel" style={{ padding: "0.75rem", background: "var(--bg-subtle)", display: "flex", gap: 16, flexWrap: "wrap" }}>
-          <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>评测项数量</span>
-            <div style={{ fontWeight: 600 }}>{activeDataset.items.length}</div>
-          </div>
-          <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>意图类型</span>
-            <div style={{ fontWeight: 600 }}>{activeDataset.intentTypes.join(" / ")}</div>
-          </div>
-        </div>
-
         <div className="panel" style={{ flex: 1, overflow: "auto", padding: "1rem" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {/* 表头 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 8, padding: "8px", background: "var(--bg-subtle)", fontWeight: 600, fontSize: "0.8rem" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "50px 1fr 120px",
+                gap: 8,
+                padding: "8px",
+                background: "var(--bg-subtle)",
+                fontWeight: 600,
+                fontSize: "0.8rem",
+              }}
+            >
+              <span>序号</span>
               <span>问题</span>
-              <span>人工标注意图</span>
+              <span>人工标注</span>
             </div>
-            {/* 表格行 */}
-            {activeDataset.items.map((item) => (
-              <div key={item.id} style={{ display: "grid", gridTemplateColumns: "1fr 150px", gap: 8, padding: "8px", borderBottom: "1px solid var(--border)" }}>
+            {activeDataset.items.map((item, index) => (
+              <div
+                key={item.id}
+                style={{ display: "grid", gridTemplateColumns: "50px 1fr 120px", gap: 8, padding: "8px", borderBottom: "1px solid var(--border)" }}
+              >
+                <span>{index + 1}</span>
                 <span style={{ fontSize: "0.85rem" }}>{item.question}</span>
-                <span style={{ fontSize: "0.85rem" }}>{item.humanLabel || "—"}</span>
+                <span style={{ fontSize: "0.85rem" }}>
+                  {item.humanLabel ? (
+                    <span className="chip">
+                      {item.humanLabel}: {INTENT_MAP[item.humanLabel]}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </span>
               </div>
             ))}
           </div>
@@ -660,14 +638,14 @@ export function IntentTestView({
     );
   };
 
-  // 任务列表视图
+  // 任务列表
   const renderTasksView = () => (
     <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
           <h2 style={{ margin: 0, fontSize: "1.1rem" }}>意图识别测试任务</h2>
           <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-            选择评测集和模型，运行意图识别测试
+            运行评测集，对比人工标注与AI识别结果
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -675,7 +653,7 @@ export function IntentTestView({
             查看评测集
           </button>
           <button type="button" className="btn btn-primary" onClick={startCreateTask}>
-            ＋ 新建测试任务
+            ＋ 新建测试
           </button>
         </div>
       </div>
@@ -685,14 +663,15 @@ export function IntentTestView({
           <div className="panel" style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
             <p>暂无测试任务</p>
             <button type="button" className="btn btn-primary" style={{ marginTop: 12 }} onClick={startCreateTask}>
-              创建第一个任务
+              创建第一个测试
             </button>
           </div>
         ) : (
           tasks.map((task) => {
-            const isRunning = task.status === "running";
+            const isCompleted = task.status === "completed";
             const testedCount = task.items.filter((i) => i.aiLabel).length;
-
+            const matchedCount = task.items.filter((i) => i.isMatch).length;
+            const accuracy = testedCount > 0 ? Math.round((matchedCount / testedCount) * 100) : 0;
             return (
               <div key={task.id} className="panel" style={{ padding: "1rem", marginBottom: 12 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -702,11 +681,11 @@ export function IntentTestView({
                       className="badge"
                       style={{
                         marginLeft: 12,
-                        background: isRunning ? "rgba(37,99,235,0.1)" : "rgba(22,163,74,0.1)",
-                        color: isRunning ? "var(--accent)" : "#16a34a",
+                        background: isCompleted ? "rgba(22,163,74,0.1)" : "rgba(37,99,235,0.1)",
+                        color: isCompleted ? "#16a34a" : "var(--accent)",
                       }}
                     >
-                      {isRunning ? "进行中" : "已完成"}
+                      {isCompleted ? "已完成" : "进行中"}
                     </span>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
@@ -718,27 +697,37 @@ export function IntentTestView({
                         setViewMode("taskDetail");
                       }}
                     >
-                      {isRunning ? "继续测试" : "查看详情"}
+                      查看详情
                     </button>
+                    {isCompleted && (
+                      <button type="button" className="btn btn-primary" onClick={() => rerunTask(task as IntentTestTask & { baseUrl?: string })}>
+                        重新测试
+                      </button>
+                    )}
                     <button type="button" className="btn btn-danger" onClick={() => deleteTask(task.id)}>
                       删除
                     </button>
                   </div>
                 </div>
                 <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 8 }}>
-                  模型: {getModelLabel(task.modelId)} · 提示词: {getPromptLabel(task.promptId)} · {testedCount}/{task.items.length} 已测
+                  模型: {getModelLabel(task.modelId)} · 测试数: {task.items.length} 条 · 进度: {testedCount}/{task.items.length}
+                  {testedCount > 0 && (
+                    <>
+                      <span style={{ marginLeft: 8 }}>|</span>
+                      <span style={{ marginLeft: 8 }}>
+                        通过率: <strong style={{ color: accuracy >= 80 ? "#16a34a" : accuracy >= 60 ? "#ca8a04" : "#dc2626" }}>
+                          {accuracy}%
+                        </strong>
+                      </span>
+                      <span style={{ marginLeft: 8 }}>
+                        匹配: <strong style={{ color: "#16a34a" }}>{matchedCount}</strong>
+                      </span>
+                      <span style={{ marginLeft: 8 }}>
+                        不匹配: <strong style={{ color: "#dc2626" }}>{testedCount - matchedCount}</strong>
+                      </span>
+                    </>
+                  )}
                 </div>
-                {task.summary && (
-                  <div style={{ marginTop: 8, display: "flex", gap: 16, fontSize: "0.78rem" }}>
-                    <span>
-                      准确率: <strong style={{ color: task.summary.accuracy >= 80 ? "#16a34a" : task.summary.accuracy >= 60 ? "#ca8a04" : "#dc2626" }}>
-                        {task.summary.accuracy}%
-                      </strong>
-                    </span>
-                    <span>通过: <strong style={{ color: "#16a34a" }}>{task.summary.matchedCount}</strong></span>
-                    <span>不通过: <strong style={{ color: "#dc2626" }}>{task.summary.failedCount}</strong></span>
-                  </div>
-                )}
               </div>
             );
           })
@@ -747,201 +736,263 @@ export function IntentTestView({
     </div>
   );
 
-  // 任务创建视图
-  const renderTaskCreateView = () => (
-    <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ margin: 0, fontSize: "1.1rem" }}>新建测试任务</h2>
-        <button type="button" className="btn" onClick={() => setViewMode("tasks")}>
-          ← 返回
-        </button>
+  // 创建任务
+  const renderTaskCreateView = () => {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2 style={{ margin: 0, fontSize: "1.1rem" }}>新建意图识别测试</h2>
+          <button type="button" className="btn" onClick={() => setViewMode("tasks")}>
+            ← 返回
+          </button>
+        </div>
+
+        <div className="panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
+          <input className="input" placeholder="任务名称" value={taskFormName} onChange={(e) => setTaskFormName(e.target.value)} />
+
+          <div>
+            <div className="label">选择评测集</div>
+            <select className="select" value={taskFormDatasetId} onChange={(e) => setTaskFormDatasetId(e.target.value)}>
+              {datasets.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name} ({d.items.length} 条)
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <div className="label">选择模型 (chat_svc)</div>
+            <select className="select" value={taskFormModelId} onChange={(e) => setTaskFormModelId(e.target.value)}>
+              <option value="">默认模型</option>
+              {/* Qwen */}
+              <option value="qwen">qwen</option>
+              <option value="qwen-vl">qwen-vl</option>
+              <option value="qwen-vl-closet">qwen-vl-closet</option>
+              <option value="qwen-vl-calo">qwen-vl-calo</option>
+              <option value="qwen-turbo">qwen-turbo</option>
+              <option value="qwen-max">qwen-max</option>
+              <option value="qwen3max">qwen3max</option>
+              {/* GPT */}
+              <option value="closet_gpt4o">closet_gpt4o</option>
+              <option value="closet_gpt4omini">closet_gpt4omini</option>
+              <option value="closet_gpt54mini">closet_gpt54mini</option>
+              <option value="closet_gpt51">closet_gpt51</option>
+              {/* Gemini */}
+              <option value="gemini3.1flash-lite">gemini3.1flash-lite</option>
+              <option value="gemini3.1pro">gemini3.1pro</option>
+            </select>
+          </div>
+
+          <div>
+            <div className="label">意图识别提示词（prompt_closet_chat_detect）</div>
+            <textarea
+              className="textarea-field"
+              rows={6}
+              placeholder="输入自定义意图识别提示词，留空使用系统默认"
+              value={taskFormDetectPrompt}
+              onChange={(e) => setTaskFormDetectPrompt(e.target.value)}
+            />
+            <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
+              用于覆盖默认的 closet_chat_detect 提示词
+            </p>
+          </div>
+
+          <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
+            <button type="button" className="btn btn-primary" onClick={createTask}>
+              开始测试
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setViewMode("tasks")}>
+              取消
+            </button>
+          </div>
+        </div>
       </div>
+    );
+  };
 
-      <div className="panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
-        <input
-          className="input"
-          placeholder="任务名称"
-          value={taskFormName}
-          onChange={(e) => setTaskFormName(e.target.value)}
+  // 运行中视图
+  const renderRunningView = () => (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0, alignItems: "center", justifyContent: "center" }}>
+      <div style={{ fontSize: "3rem" }}>⏳</div>
+      <h2 style={{ margin: 0 }}>测试中...</h2>
+      <div style={{ fontSize: "1.2rem", color: "var(--accent)" }}>
+        {runningProgress.current} / {runningProgress.total}
+      </div>
+      <div style={{ width: 300, height: 8, background: "var(--border)", borderRadius: 4, overflow: "hidden" }}>
+        <div
+          style={{
+            width: `${(runningProgress.current / runningProgress.total) * 100}%`,
+            height: "100%",
+            background: "var(--accent)",
+            transition: "width 0.3s",
+          }}
         />
-
-        <div>
-          <div className="label">选择评测集</div>
-          <select
-            className="select"
-            value={taskFormDatasetId}
-            onChange={(e) => setTaskFormDatasetId(e.target.value)}
-          >
-            {datasets.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.name} ({d.items.length} 条)
-              </option>
-            ))}
-          </select>
-          {taskFormDatasetId && (
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 4 }}>
-              将使用评测集中的 {datasets.find((d) => d.id === taskFormDatasetId)?.items.length} 条评测项
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="label">选择模型</div>
-          <select
-            className="select"
-            value={taskFormModelId}
-            onChange={(e) => setTaskFormModelId(e.target.value)}
-          >
-            {MODEL_PRESETS.map((m) => (
-              <option key={m.id} value={m.id}>{m.label}</option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <div className="label">选择提示词</div>
-          <select
-            className="select"
-            value={taskFormPromptId}
-            onChange={(e) => setTaskFormPromptId(e.target.value)}
-          >
-            {prompts.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        </div>
-
-        <div style={{ display: "flex", gap: 8, marginTop: "auto" }}>
-          <button type="button" className="btn btn-primary" onClick={createTask}>
-            创建任务
-          </button>
-          <button type="button" className="btn btn-ghost" onClick={() => setViewMode("tasks")}>
-            取消
-          </button>
-        </div>
       </div>
     </div>
   );
 
-  // 任务详情视图
+  // 任务详情
   const renderTaskDetailView = () => {
     if (!activeTask) return null;
-    const isRunning = activeTask.status === "running";
+    const isCompleted = activeTask.status === "completed";
     const testedCount = activeTask.items.filter((i) => i.aiLabel).length;
+    const matchedCount = activeTask.items.filter((i) => i.isMatch).length;
+    const accuracy = testedCount > 0 ? Math.round((matchedCount / testedCount) * 100) : 0;
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
-        {/* 任务头部 */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <strong style={{ fontSize: "1rem" }}>{activeTask.name}</strong>
-            <span
-              className="badge"
-              style={{
-                marginLeft: 12,
-                background: isRunning ? "rgba(37,99,235,0.1)" : "rgba(22,163,74,0.1)",
-                color: isRunning ? "var(--accent)" : "#16a34a",
-              }}
-            >
-              {isRunning ? "进行中" : "已完成"}
-            </span>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <h2 style={{ margin: 0, fontSize: "1.1rem" }}>{activeTask.name}</h2>
+              <span
+                className="badge"
+                style={{
+                  background: isCompleted ? "rgba(22,163,74,0.1)" : "rgba(37,99,235,0.1)",
+                  color: isCompleted ? "#16a34a" : "var(--accent)",
+                }}
+              >
+                {isCompleted ? "已完成" : "进行中"}
+              </span>
+            </div>
+            <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
+              模型: {getModelLabel(activeTask.modelId)} · 共 {activeTask.items.length} 条
+            </p>
           </div>
           <div style={{ display: "flex", gap: 8 }}>
-            {isRunning && (
-              <>
-                <button type="button" className="btn btn-primary" onClick={() => runAllItems(activeTask)}>
-                  运行全部未测
-                </button>
-                <button type="button" className="btn" onClick={() => endTask(activeTask)}>
-                  结束任务
-                </button>
-              </>
+            {isCompleted && (
+              <button type="button" className="btn btn-primary" onClick={() => rerunTask(activeTask as IntentTestTask & { baseUrl?: string })}>
+                重新测试
+              </button>
             )}
-            <button type="button" className="btn btn-ghost" onClick={() => setViewMode("tasks")}>
+            <button type="button" className="btn" onClick={() => setViewMode("tasks")}>
               返回列表
             </button>
           </div>
         </div>
 
-        {/* 任务配置摘要 */}
-        <div className="panel" style={{ padding: "0.75rem", background: "var(--bg-subtle)", display: "flex", gap: 16, flexWrap: "wrap" }}>
+        {/* 统计面板 */}
+        <div className="panel" style={{ padding: "1rem", display: "flex", gap: 24 }}>
           <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>模型</span>
-            <div style={{ fontWeight: 600 }}>{getModelLabel(activeTask.modelId)}</div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>测试数</div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 600 }}>{activeTask.items.length}</div>
           </div>
           <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>评测项</span>
-            <div style={{ fontWeight: 600 }}>{activeTask.items.length}</div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>当前进度</div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 600 }}>
+              {testedCount}/{activeTask.items.length}
+              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginLeft: 4 }}>
+                ({Math.round((testedCount / activeTask.items.length) * 100)}%)
+              </span>
+            </div>
           </div>
           <div>
-            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>进度</span>
-            <div style={{ fontWeight: 600 }}>{testedCount} / {activeTask.items.length}</div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>通过率</div>
+            <div
+              style={{
+                fontSize: "1.5rem",
+                fontWeight: 600,
+                color: accuracy >= 80 ? "#16a34a" : accuracy >= 60 ? "#ca8a04" : "#dc2626",
+              }}
+            >
+              {accuracy}%
+            </div>
           </div>
-          {activeTask.summary && (
-            <>
-              <div>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>准确率</span>
-                <div style={{ fontWeight: 600, color: activeTask.summary.accuracy >= 80 ? "#16a34a" : activeTask.summary.accuracy >= 60 ? "#ca8a04" : "#dc2626" }}>
-                  {activeTask.summary.accuracy}%
-                </div>
-              </div>
-              <div>
-                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>通过/不通过</span>
-                <div style={{ fontWeight: 600 }}>
-                  <span style={{ color: "#16a34a" }}>{activeTask.summary.matchedCount}</span> / <span style={{ color: "#dc2626" }}>{activeTask.summary.failedCount}</span>
-                </div>
-              </div>
-            </>
-          )}
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>匹配</div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 600, color: "#16a34a" }}>{matchedCount}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>不匹配</div>
+            <div style={{ fontSize: "1.5rem", fontWeight: 600, color: "#dc2626" }}>{testedCount - matchedCount}</div>
+          </div>
         </div>
 
-        {/* 评测结果表格 */}
-        <div style={{ flex: 1, overflow: "auto" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-            {/* 表头 */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 80px 100px", gap: 8, padding: "10px", background: "var(--bg-subtle)", fontWeight: 600, fontSize: "0.8rem", position: "sticky", top: 0 }}>
-              <span>问题</span>
-              <span>人工标注</span>
-              <span>AI识别</span>
-              <span>结果</span>
-              <span>操作</span>
+        {/* 使用的提示词 */}
+        {activeTask.systemPrompt && (
+          <div className="panel" style={{ padding: "0.75rem 1rem" }}>
+            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 8 }}>
+              使用的意图识别提示词 (prompt_closet_chat_detect)
             </div>
-            {/* 表格行 */}
-            {activeTask.items.map((item) => (
-              <div
-                key={item.id}
+            <details>
+              <summary style={{ cursor: "pointer", fontSize: "0.8rem", color: "var(--accent)" }}>
+                点击查看提示词内容
+              </summary>
+              <pre
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 120px 120px 80px 100px",
-                  gap: 8,
-                  padding: "8px 10px",
-                  alignItems: "center",
-                  background: item.isMatch === false ? "rgba(220,38,38,0.05)" : item.isMatch === true ? "rgba(22,163,74,0.05)" : "transparent",
-                  borderLeft: item.isMatch === false ? "3px solid #dc2626" : item.isMatch === true ? "3px solid #16a34a" : "none",
+                  margin: "8px 0 0",
+                  padding: "0.75rem",
+                  background: "var(--bg-subtle)",
+                  borderRadius: 6,
+                  fontSize: "0.8rem",
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "var(--font-mono)",
+                  maxHeight: 200,
+                  overflow: "auto",
                 }}
               >
-                <span style={{ fontSize: "0.85rem" }}>{item.question}</span>
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>{item.humanLabel}</span>
-                <span style={{ fontSize: "0.8rem", color: item.aiLabel ? "var(--text)" : "var(--text-muted)" }}>
-                  {item.aiLabel ?? "—"}
-                </span>
-                <span style={{ fontSize: "0.75rem", fontWeight: 600 }}>
-                  {item.isMatch === true && <span style={{ color: "#16a34a" }}>✓ 通过</span>}
-                  {item.isMatch === false && <span style={{ color: "#dc2626" }}>✗ 不通过</span>}
-                  {item.isMatch === undefined && <span style={{ color: "var(--text-muted)" }}>待测试</span>}
-                </span>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  style={{ fontSize: "0.7rem", padding: "2px 8px" }}
-                  disabled={runningItemId === item.id || !isRunning}
-                  onClick={() => runItem(activeTask, item.id)}
-                >
-                  {runningItemId === item.id ? "测试中..." : item.aiLabel ? "重测" : "测试"}
-                </button>
-              </div>
-            ))}
+                {activeTask.systemPrompt}
+              </pre>
+            </details>
           </div>
+        )}
+
+        <div className="panel" style={{ flex: 1, overflow: "auto", padding: 0 }}>
+          <table className="data-table" style={{ width: "100%" }}>
+            <thead>
+              <tr>
+                <th style={{ width: 50 }}>序号</th>
+                <th>问题</th>
+                <th style={{ width: 160, whiteSpace: "nowrap" }}>人工打标</th>
+                <th style={{ width: 160, whiteSpace: "nowrap" }}>AI打标</th>
+                <th style={{ width: 100, whiteSpace: "nowrap" }}>结果</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeTask.items.map((item, index) => (
+                <tr
+                  key={item.id}
+                  style={{
+                    background:
+                      item.isMatch === false
+                        ? "rgba(220,38,38,0.05)"
+                        : item.isMatch === true
+                        ? "rgba(22,163,74,0.05)"
+                        : undefined,
+                  }}
+                >
+                  <td>{index + 1}</td>
+                  <td style={{ maxWidth: 400 }}>
+                    <div style={{ fontSize: "0.9rem" }}>{item.question}</div>
+                  </td>
+                  <td>
+                    {item.humanLabel ? (
+                      <span className="chip">
+                        {item.humanLabel}: {INTENT_MAP[item.humanLabel]}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td>
+                    {item.aiLabel ? (
+                      <span className="chip" style={{ background: "var(--accent-soft)", color: "var(--accent)" }}>
+                        {item.aiLabel}: {INTENT_MAP[item.aiLabel]}
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td>
+                    {item.isMatch === true && <span style={{ color: "#16a34a", fontWeight: 600 }}>✓ 一致</span>}
+                    {item.isMatch === false && <span style={{ color: "#dc2626", fontWeight: 600 }}>✗ 不一致</span>}
+                    {item.isMatch === undefined && <span style={{ color: "var(--text-muted)" }}>—</span>}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     );
@@ -959,6 +1010,8 @@ export function IntentTestView({
       return renderTasksView();
     case "createTask":
       return renderTaskCreateView();
+    case "running":
+      return renderRunningView();
     case "taskDetail":
       return renderTaskDetailView();
     default:

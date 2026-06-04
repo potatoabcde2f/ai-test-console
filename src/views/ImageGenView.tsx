@@ -16,9 +16,6 @@ export function ImageGenView({ records }: Props) {
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
       <div>
         <h2 style={{ margin: 0, fontSize: "1.1rem" }}>生图结果白盒化</h2>
-        <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          展示生图 id、模型、提示词与时间。对话中触发「生图」类话术会自动写入一条 Demo 记录。
-        </p>
       </div>
       <div className="table-wrap scroll-y" style={{ flex: 1 }}>
         <table className="data-table">

@@ -152,20 +152,8 @@ export function DialogueTestView({
   };
 
   const [internalPendingImages, setInternalPendingImages] = useState<MessageImage[]>([]);
-  const pendingImages = externalPendingImages !== undefined ? externalPendingImages : internalPendingImages;
-  const setPendingImages: React.Dispatch<React.SetStateAction<MessageImage[]>> = (value) => {
-    if (setExternalPendingImages) {
-      if (typeof value === 'function') {
-        const currentImages = externalPendingImages !== undefined ? externalPendingImages : internalPendingImages;
-        const newValue = (value as Function)(currentImages);
-        setExternalPendingImages(newValue);
-      } else {
-        setExternalPendingImages(value);
-      }
-    } else {
-      setInternalPendingImages(value);
-    }
-  };
+  const pendingImages = internalPendingImages;
+  const setPendingImages = setInternalPendingImages;
 
   const [internalFollowUpQuestions, setInternalFollowUpQuestions] = useState<string[]>([]);
   const followUpQuestions = externalFollowUpQuestions !== undefined ? externalFollowUpQuestions : internalFollowUpQuestions;
@@ -379,11 +367,18 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
 
           // 更新 pendingImages，将本地预览替换为真实 OSS URL
           setPendingImages((prev) => {
-            // 找到第一个 uploading 状态的图片并替换
-            const idx = prev.findIndex((img) => img.status === "uploading");
+            // 找到第一个 uploading 状态的图片并替换（使用 localUrl 匹配）
+            const idx = prev.findIndex((img) => img.status === "uploading" && img.url === localUrl);
             if (idx >= 0) {
               const newImages = [...prev];
               newImages[idx] = { url: realUrl, type: "upload", status: "done" };
+              return newImages;
+            }
+            // 如果找不到匹配的，替换第一个 uploading 状态的（兜底）
+            const fallbackIdx = prev.findIndex((img) => img.status === "uploading");
+            if (fallbackIdx >= 0) {
+              const newImages = [...prev];
+              newImages[fallbackIdx] = { url: realUrl, type: "upload", status: "done" };
               return newImages;
             }
             return prev;

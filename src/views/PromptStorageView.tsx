@@ -328,18 +328,23 @@ export function PromptStorageView({
                 onClick={() => {
                   // 如果要切换到不同版本
                   if (activeId && activeId !== p.id) {
-                    // 检查当前版本是否未提交（systemPrompt为空）
+                    // 先记录要删除的未提交版本ID（在onSelect之前）
                     const currentPrompt = prompts.find((cp) => cp.id === activeId && cp.category === activeTab);
-                    if (currentPrompt && (!currentPrompt.systemPrompt || currentPrompt.systemPrompt === "")) {
-                      // 删除未提交的版本，然后选中目标版本
-                      onDelete(currentPrompt.id);
-                    }
-                    // 立即选中目标版本
+                    const promptToDelete = currentPrompt && (!currentPrompt.systemPrompt || currentPrompt.systemPrompt === "")
+                      ? currentPrompt.id
+                      : null;
+
+                    // 先选中目标版本
                     onSelect(p.id);
                     setEditingId(null);
                     setEditingPromptName(null);
-                  } else if (activeId !== p.id) {
-                    // 直接选中
+
+                    // 然后再删除之前记录的未提交版本
+                    if (promptToDelete) {
+                      onDelete(promptToDelete);
+                    }
+                  } else {
+                    // 同一版本，只选中
                     onSelect(p.id);
                     setEditingId(null);
                     setEditingPromptName(null);
