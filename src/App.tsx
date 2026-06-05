@@ -341,7 +341,6 @@ export function App() {
               tasks={batchTestTasks}
               onChangeTasks={setBatchTestTasks}
               questionBank={questionBank}
-              prompts={prompts}
             />
           )}
           {nav === "intentTest" && (

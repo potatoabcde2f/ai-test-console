@@ -127,6 +127,9 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
     setCreating(false);
     setActiveTaskId(task.id);
   };
+    setCreating(false);
+    setActiveTaskId(task.id);
+  };
 
   // 运行单个问题
   const runRound = async (task: BatchTestTask & { baseUrl?: string }, questionIndex: number) => {
@@ -223,6 +226,49 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
       }
     }
   };
+
+  // 更新结果评分
+  const updateResultScore = useCallback(
+    (taskId: string, roundId: string, modelId: string, score: number | null) => {
+      onChangeTasks((prev) =>
+        prev.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            rounds: t.rounds.map((r) =>
+              r.id === roundId
+                ? { ...r, results: { ...r.results, [modelId]: { ...r.results[modelId], score } } }
+                : r
+            ),
+          };
+        })
+      );
+    },
+    [onChangeTasks]
+  );
+
+  // 更新优化备注
+  const updateResultNotes = useCallback(
+    (taskId: string, roundId: string, modelId: string, notes: string) => {
+      onChangeTasks((prev) =>
+        prev.map((t) => {
+          if (t.id !== taskId) return t;
+          return {
+            ...t,
+            rounds: t.rounds.map((r) =>
+              r.id === roundId
+                ? {
+                    ...r,
+                    results: { ...r.results, [modelId]: { ...r.results[modelId], optimizationNotes: notes } },
+                  }
+                : r
+            ),
+          };
+        })
+      );
+    },
+    [onChangeTasks]
+  );
 
   // 选择最优模型
   const selectBestModel = useCallback(
@@ -608,6 +654,7 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
                         {activeTask.modelIds.map((mid) => {
                           const res = round.results[mid];
                           const isBest = round.bestModelId === mid;
+                          const isEditing = editingResult?.roundId === round.id && editingResult?.modelId === mid;
 
                           if (!res) {
                             return (
@@ -658,17 +705,71 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
                                 {res.content}
                               </pre>
 
-                              {/* 评分显示 */}
-                              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                                {/* Score */}
-                                {res.score != null && (
-                                  <span style={{ fontSize: "0.75rem", color: "var(--accent)" }}>评分: {res.score}</span>
-                                )}
-                                {/* Notes indicator */}
-                                {res.optimizationNotes && (
-                                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>有备注</span>
-                                )}
-                              </div>
+                              {/* 评测区域 */}
+                              {isEditing ? (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                    <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>评分：</span>
+                                    <input
+                                      type="number"
+                                      min={0}
+                                      max={10}
+                                      step={0.5}
+                                      placeholder="0-10"
+                                      value={res.score ?? ""}
+                                      onChange={(e) => {
+                                        const score = e.target.value === "" ? null : Number(e.target.value);
+                                        updateResultScore(activeTask.id, round.id, mid, score);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="input"
+                                      style={{ fontSize: "0.75rem", width: 80 }}
+                                    />
+                                  </div>
+                                  <textarea
+                                    placeholder="备注..."
+                                    value={res.optimizationNotes}
+                                    onChange={(e) => updateResultNotes(activeTask.id, round.id, mid, e.target.value)}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="textarea-field"
+                                    style={{ fontSize: "0.75rem", minHeight: 50 }}
+                                  />
+                                  <button
+                                    type="button"
+                                    className="btn btn-primary"
+                                    style={{ fontSize: "0.7rem" }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingResult(null);
+                                    }}
+                                  >
+                                    完成
+                                  </button>
+                                </div>
+                              ) : (
+                                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                                  {/* Score */}
+                                  {res.score != null && (
+                                    <span style={{ fontSize: "0.75rem", color: "var(--accent)" }}>评分: {res.score}</span>
+                                  )}
+                                  {/* Notes indicator */}
+                                  {res.optimizationNotes && (
+                                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>有备注</span>
+                                  )}
+                                  {/* Edit button */}
+                                  <button
+                                    type="button"
+                                    className="btn"
+                                    style={{ fontSize: "0.7rem", padding: "2px 8px" }}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingResult({ roundId: round.id, modelId: mid });
+                                    }}
+                                  >
+                                    编辑
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           );
                         })}
