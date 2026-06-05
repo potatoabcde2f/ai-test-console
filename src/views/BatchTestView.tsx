@@ -726,6 +726,21 @@ function TaskDetailView({
 }: TaskDetailViewProps) {
   const { testedCount, totalCount, selectedCount, skippedCount } = getTaskProgress(task);
   const isCompleted = task.status === "completed";
+  const [viewingRoundId, setViewingRoundId] = useState<string | null>(null);
+
+  const viewingRound = viewingRoundId ? task.rounds.find((r) => r.id === viewingRoundId) : null;
+
+  // 查看结果视图
+  if (viewingRound) {
+    return (
+      <ResultView
+        task={task}
+        round={viewingRound}
+        onClose={() => setViewingRoundId(null)}
+        getModelLabel={getModelLabel}
+      />
+    );
+  }
 
   return (
     <div className="panel" style={{ flex: 1, padding: "1.25rem", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -950,16 +965,28 @@ function TaskDetailView({
                 </span>
 
                 {/* 操作按钮 */}
-                {!isCompleted && (
-                  <button
-                    type="button"
-                    className="btn"
-                    style={{ fontSize: "0.7rem", padding: "4px 10px", flexShrink: 0 }}
-                    onClick={() => onStartEval(round.id)}
-                  >
-                    {status === "pending" ? "评测" : "重评"}
-                  </button>
-                )}
+                <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                  {(status === "done" || status === "skipped") && (
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ fontSize: "0.7rem", padding: "4px 10px" }}
+                      onClick={() => setViewingRoundId(round.id)}
+                    >
+                      查看
+                    </button>
+                  )}
+                  {!isCompleted && (
+                    <button
+                      type="button"
+                      className="btn"
+                      style={{ fontSize: "0.7rem", padding: "4px 10px" }}
+                      onClick={() => onStartEval(round.id)}
+                    >
+                      {status === "pending" ? "评测" : "重评"}
+                    </button>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -1062,6 +1089,160 @@ function TaskListView({ tasks, bank, onOpenTask, onDeleteTask, getTaskProgress }
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+// 结果回顾视图 - 只读展示已评测结果
+interface ResultViewProps {
+  task: BatchTestTask;
+  round: BatchTestRound;
+  onClose: () => void;
+  getModelLabel: (id: string) => string;
+}
+
+function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
+  const roundIndex = task.rounds.findIndex((r) => r.id === round.id) + 1;
+  const total = task.rounds.length;
+
+  return (
+    <div className="panel" style={{ flex: 1, padding: "0.75rem 1rem", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+      {/* 顶部导航 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 500 }}>
+            第 <strong style={{ color: "var(--text)" }}>{roundIndex}</strong> / {total} 题
+          </span>
+          {round.bestModelId && round.bestModelId !== "skipped" && (
+            <span style={{ fontSize: "0.7rem", padding: "2px 8px", background: "#16a34a", color: "#fff", borderRadius: 10 }}>
+              已选 {getModelLabel(round.bestModelId)}
+            </span>
+          )}
+          {round.bestModelId === "skipped" && (
+            <span style={{ fontSize: "0.7rem", padding: "2px 8px", background: "#ca8a04", color: "#fff", borderRadius: 10 }}>
+              已跳过
+            </span>
+          )}
+        </div>
+        <button type="button" className="btn btn-ghost" style={{ fontSize: "0.75rem", padding: "4px 12px" }} onClick={onClose}>
+          ✕ 返回
+        </button>
+      </div>
+
+      {/* 问题 */}
+      <div
+        className="panel"
+        style={{
+          padding: "0.5rem 0.75rem",
+          background: "var(--accent-soft)",
+          border: "1px solid rgba(37,99,235,0.15)",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ fontSize: "0.9rem", lineHeight: 1.4 }}>{round.questionContent}</div>
+      </div>
+
+      {/* 模型回复对比 */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: task.modelIds.length === 1 ? "1fr" : task.modelIds.length === 2 ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
+          gap: 8,
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
+        {task.modelIds.map((mid, idx) => {
+          const res = round.results[mid];
+          if (!res) return null;
+          const isWinner = round.bestModelId === mid;
+
+          return (
+            <div
+              key={mid}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                textAlign: "left",
+                padding: "0.75rem",
+                background: isWinner ? "rgba(22,163,74,0.05)" : "var(--bg-subtle)",
+                border: isWinner ? "2px solid #16a34a" : "1px solid var(--border)",
+                borderRadius: 8,
+                height: "100%",
+                overflow: "hidden",
+              }}
+            >
+              {/* 模型标签 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 8,
+                  paddingBottom: 6,
+                  borderBottom: "1px solid var(--border)",
+                }}
+              >
+                <span
+                  style={{
+                    padding: "2px 8px",
+                    background: isWinner ? "#16a34a" : "var(--accent)",
+                    color: "#fff",
+                    borderRadius: 4,
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  {String.fromCharCode(65 + idx)}
+                </span>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", flex: 1 }}>
+                  {getModelLabel(mid)}
+                </span>
+                {isWinner && <span style={{ fontSize: "0.7rem", color: "#16a34a", fontWeight: 600 }}>✓ 胜出</span>}
+              </div>
+              {/* 回复内容 */}
+              <div
+                style={{
+                  flex: 1,
+                  overflow: "auto",
+                  fontSize: "0.85rem",
+                  lineHeight: 1.5,
+                  color: "var(--text)",
+                  textAlign: "left",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
+                {res.content}
+                {/* 显示图片 */}
+                {res.images && res.images.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, alignItems: "center" }}>
+                    {res.images.map((imgUrl: string, imgIdx: number) => (
+                      <img
+                        key={imgIdx}
+                        src={imgUrl}
+                        alt={`生成图片 ${imgIdx + 1}`}
+                        style={{
+                          width: "auto",
+                          height: "auto",
+                          maxWidth: "100%",
+                          maxHeight: 200,
+                          objectFit: "contain",
+                          borderRadius: 6,
+                          border: "1px solid var(--border)",
+                        }}
+                        onClick={() => window.open(imgUrl, "_blank")}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
