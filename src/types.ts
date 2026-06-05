@@ -193,6 +193,8 @@ export interface BatchTestResult {
   modelId: string;
   /** 模型回复内容 */
   content: string;
+  /** 图片URL列表 */
+  images?: string[];
   /** 人工评分 0-10 */
   score: number | null;
   /** 是否通过 */

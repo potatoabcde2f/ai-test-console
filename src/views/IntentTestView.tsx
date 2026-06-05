@@ -80,7 +80,15 @@ export function IntentTestView({
 
   const startCreateDataset = () => {
     setEditingDatasetId(null);
-    setDatasetFormName("");
+    // 自动生成名称：意图识别评测集N
+    const existingNumbers = datasets
+      .map((d) => {
+        const match = d.name.match(/^意图识别评测集(\d+)$/);
+        return match ? parseInt(match[1], 10) : 0;
+      })
+      .filter((n) => n > 0);
+    const nextNumber = existingNumbers.length > 0 ? Math.max(...existingNumbers) + 1 : 1;
+    setDatasetFormName(`意图识别评测集${nextNumber}`);
     setDatasetFormDesc("");
     setDatasetFormItems([]);
     setImportCategoryId("");
@@ -152,14 +160,23 @@ export function IntentTestView({
       window.alert("所选分类没有问题");
       return;
     }
-    const newItems: IntentTestItem[] = category.questions.map((q) => ({
-      id: uid("iti"),
-      question: q.content,
-      humanLabel: "",
-      createdAt: Date.now(),
-    }));
+    // 只导入新问题（根据问题内容去重，保留已有问题及其标注）
+    const existingQuestions = new Set(datasetFormItems.map((item) => item.question.trim()));
+    const newItems: IntentTestItem[] = category.questions
+      .filter((q) => !existingQuestions.has(q.content.trim()))
+      .map((q) => ({
+        id: uid("iti"),
+        question: q.content,
+        humanLabel: "",
+        createdAt: Date.now(),
+      }));
+    if (newItems.length === 0) {
+      showToast("没有新的问题可导入");
+      return;
+    }
     setDatasetFormItems((prev) => [...prev, ...newItems]);
     setImportCategoryId("");
+    showToast(`成功导入 ${newItems.length} 个新问题`);
   };
 
   const addDatasetItem = () => {
@@ -233,8 +250,10 @@ export function IntentTestView({
 
     onChangeTasks((prev) => [task, ...prev]);
     setActiveTaskId(task.id);
-    setViewMode("running");
-    // 自动开始运行
+    // 直接跳转到任务详情页面，显示toast提示
+    setViewMode("taskDetail");
+    showToast("测试任务创建成功");
+    // 后台自动开始运行
     setTimeout(() => runTask(task, taskFormDetectPrompt), 100);
   };
 
@@ -304,25 +323,13 @@ export function IntentTestView({
           const aiLabel = detectStep?.output?.trim() || null;
           const isMatch = aiLabel ? aiLabel === item.humanLabel : undefined;
 
-          // 提取图片 URL（如果有）
-          const images: string[] = [];
-          if (Array.isArray(data.data.message)) {
-            for (const msg of data.data.message) {
-              if (msg.type === "image" && msg.url) {
-                images.push(msg.url);
-              } else if (msg.type === "image_url" && msg.image?.url) {
-                images.push(msg.image.url);
-              }
-            }
-          }
-
           onChangeTasks((prev) =>
             prev.map((t) => {
               if (t.id !== task.id) return t;
               return {
                 ...t,
                 items: t.items.map((it) =>
-                  it.id === item.id ? { ...it, aiLabel, isMatch, images, error: undefined } : it
+                  it.id === item.id ? { ...it, aiLabel, isMatch, error: undefined } : it
                 ),
                 progress: {
                   current: i + 1,
@@ -444,25 +451,13 @@ export function IntentTestView({
         const aiLabel = detectStep?.output?.trim() || null;
         const isMatch = aiLabel ? aiLabel === item.humanLabel : undefined;
 
-        // 提取图片 URL（如果有）
-        const images: string[] = [];
-        if (Array.isArray(data.data.message)) {
-          for (const msg of data.data.message) {
-            if (msg.type === "image" && msg.url) {
-              images.push(msg.url);
-            } else if (msg.type === "image_url" && msg.image?.url) {
-              images.push(msg.image.url);
-            }
-          }
-        }
-
         onChangeTasks((prev) =>
           prev.map((t) => {
             if (t.id !== task.id) return t;
             return {
               ...t,
               items: t.items.map((it) =>
-                it.id === item.id ? { ...it, aiLabel, isMatch, images, error: undefined } : it
+                it.id === item.id ? { ...it, aiLabel, isMatch, error: undefined } : it
               ),
               updatedAt: Date.now(),
             };
@@ -581,50 +576,54 @@ export function IntentTestView({
         </button>
       </div>
 
-      <div className="panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 12, flex: 1, overflow: "auto" }}>
-        <input
-          className="input"
-          placeholder="评测集名称"
-          value={datasetFormName}
-          onChange={(e) => setDatasetFormName(e.target.value)}
-        />
-        <input
-          className="input"
-          placeholder="评测集描述（可选）"
-          value={datasetFormDesc}
-          onChange={(e) => setDatasetFormDesc(e.target.value)}
-        />
+      <div className="panel" style={{ padding: "1rem", display: "flex", flexDirection: "column", gap: 12, flex: 1, minHeight: 0 }}>
+        {/* 基本信息区域 */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12, flexShrink: 0 }}>
+          <input
+            className="input"
+            placeholder="评测集名称"
+            value={datasetFormName}
+            onChange={(e) => setDatasetFormName(e.target.value)}
+          />
+          <input
+            className="input"
+            placeholder="评测集描述（可选）"
+            value={datasetFormDesc}
+            onChange={(e) => setDatasetFormDesc(e.target.value)}
+          />
 
-        <div className="panel" style={{ padding: "0.75rem", background: "var(--bg-subtle)" }}>
-          <div className="label">从问题库导入</div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <select
-              className="select"
-              value={importCategoryId}
-              onChange={(e) => setImportCategoryId(e.target.value)}
-              style={{ flex: 1 }}
-            >
-              <option value="">选择分类...</option>
-              {bank.categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
-                  {cat.name} ({cat.questions.length} 条)
-                </option>
-              ))}
-            </select>
-            <button type="button" className="btn btn-primary" onClick={importFromQuestionBank} disabled={!importCategoryId}>
-              导入
-            </button>
+          <div className="panel" style={{ padding: "0.75rem", background: "var(--bg-subtle)" }}>
+            <div className="label">从问题库导入</div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select
+                className="select"
+                value={importCategoryId}
+                onChange={(e) => setImportCategoryId(e.target.value)}
+                style={{ flex: 1 }}
+              >
+                <option value="">选择分类...</option>
+                {bank.categories.map((cat) => (
+                  <option key={cat.id} value={cat.id}>
+                    {cat.name} ({cat.questions.length} 条)
+                  </option>
+                ))}
+              </select>
+              <button type="button" className="btn btn-primary" onClick={importFromQuestionBank} disabled={!importCategoryId}>
+                导入
+              </button>
+            </div>
           </div>
         </div>
 
-        <div style={{ flex: 1, minHeight: 200 }}>
-          <div className="label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* 评测项列表区域 - 可滚动 */}
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 8, overflow: "hidden" }}>
+          <div className="label" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
             <span>评测项（共 {datasetFormItems.length} 条）</span>
             <button type="button" className="btn" style={{ fontSize: "0.75rem" }} onClick={addDatasetItem}>
               ＋ 添加
             </button>
           </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 4, maxHeight: 400, overflow: "auto" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 4, flex: 1, overflow: "auto", border: "1px solid var(--border)", borderRadius: 6 }}>
             <div
               style={{
                 display: "grid",
@@ -634,56 +633,67 @@ export function IntentTestView({
                 background: "var(--bg-subtle)",
                 fontWeight: 600,
                 fontSize: "0.8rem",
+                flexShrink: 0,
               }}
             >
               <span>问题</span>
               <span>人工标注(1-4)</span>
               <span></span>
             </div>
-            {datasetFormItems.map((item) => (
-              <div
-                key={item.id}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 120px 50px",
-                  gap: 8,
-                  padding: "4px 8px",
-                  alignItems: "center",
-                }}
-              >
-                <input
-                  className="input"
-                  placeholder="输入问题"
-                  value={item.question}
-                  onChange={(e) => updateDatasetItem(item.id, "question", e.target.value)}
-                  style={{ fontSize: "0.85rem" }}
-                />
-                <select
-                  className="select"
-                  value={item.humanLabel}
-                  onChange={(e) => updateDatasetItem(item.id, "humanLabel", e.target.value)}
-                  style={{ fontSize: "0.85rem" }}
-                >
-                  <option value="">选择...</option>
-                  <option value="1">1-生图</option>
-                  <option value="2">2-通用</option>
-                  <option value="3">3-产品</option>
-                  <option value="4">4-推荐</option>
-                </select>
-                <button
-                  type="button"
-                  className="btn btn-danger"
-                  style={{ padding: "2px 8px", fontSize: "0.75rem" }}
-                  onClick={() => deleteDatasetItem(item.id)}
-                >
-                  删除
-                </button>
-              </div>
-            ))}
+            <div style={{ overflow: "auto", flex: 1 }}>
+              {datasetFormItems.length === 0 ? (
+                <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)" }}>
+                  暂无评测项，点击上方"添加"按钮或从问题库导入
+                </div>
+              ) : (
+                datasetFormItems.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "1fr 120px 50px",
+                      gap: 8,
+                      padding: "8px",
+                      alignItems: "center",
+                      borderBottom: "1px solid var(--border)",
+                    }}
+                  >
+                    <input
+                      className="input"
+                      placeholder="输入问题"
+                      value={item.question}
+                      onChange={(e) => updateDatasetItem(item.id, "question", e.target.value)}
+                      style={{ fontSize: "0.85rem" }}
+                    />
+                    <select
+                      className="select"
+                      value={item.humanLabel}
+                      onChange={(e) => updateDatasetItem(item.id, "humanLabel", e.target.value)}
+                      style={{ fontSize: "0.85rem" }}
+                    >
+                      <option value="">选择...</option>
+                      <option value="1">1-生图</option>
+                      <option value="2">2-通用</option>
+                      <option value="3">3-产品</option>
+                      <option value="4">4-推荐</option>
+                    </select>
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      style={{ padding: "2px 8px", fontSize: "0.75rem" }}
+                      onClick={() => deleteDatasetItem(item.id)}
+                    >
+                      删除
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 8 }}>
+        {/* 底部按钮区域 - 固定在底部 */}
+        <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: "1px solid var(--border)", flexShrink: 0 }}>
           <button type="button" className="btn btn-primary" onClick={saveDataset}>
             保存
           </button>
@@ -1110,20 +1120,6 @@ export function IntentTestView({
                   <td>{index + 1}</td>
                   <td style={{ maxWidth: 400 }}>
                     <div style={{ fontSize: "0.9rem" }}>{item.question}</div>
-                    {/* 显示图片 */}
-                    {item.images && item.images.length > 0 && (
-                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                        {item.images.map((img: string, idx: number) => (
-                          <img
-                            key={idx}
-                            src={img}
-                            alt={`生成图片 ${idx + 1}`}
-                            style={{ maxWidth: 150, maxHeight: 150, borderRadius: 8, border: "1px solid var(--border)" }}
-                            onClick={() => window.open(img, "_blank")}
-                          />
-                        ))}
-                      </div>
-                    )}
                     {/* 显示错误信息 */}
                     {item.error && (
                       <div style={{ fontSize: "0.75rem", color: "#dc2626", marginTop: 4 }}>

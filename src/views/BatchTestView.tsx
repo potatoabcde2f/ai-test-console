@@ -71,6 +71,11 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
       if (set.has(id)) {
         set.delete(id);
       } else {
+        // 最多选择3个模型
+        if (set.size >= 3) {
+          showToast("最多只能选择3个模型进行对比");
+          return prev;
+        }
         set.add(id);
       }
       return [...set];
@@ -161,12 +166,17 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
 
           const data = await response.json();
           let content = "";
+          const images: string[] = [];
 
           if (data.status === 1 && data.data) {
             if (Array.isArray(data.data.message)) {
               for (const msg of data.data.message) {
                 if (msg.type === "text") {
                   content = msg.text || "";
+                } else if (msg.type === "image" && msg.url) {
+                  images.push(msg.url);
+                } else if (msg.type === "image_url" && msg.image?.url) {
+                  images.push(msg.image.url);
                 }
               }
             }
@@ -175,7 +185,8 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
           return [
             mid,
             {
-              content: content || "（无回复）",
+              content: content || (images.length > 0 ? "" : "（无回复）"),
+              images: images.length > 0 ? images : undefined,
               score: null,
               verdict: "pending",
               optimizationNotes: "",
@@ -339,12 +350,17 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
     return { testedCount, totalCount, selectedCount, skippedCount };
   };
 
-  // 获取当前需要评测的round
+  // 获取当前需要评测的round - 跳过的题放在最后
   const getEvaluationRounds = (task: BatchTestTask) => {
+    const pendingRounds = task.rounds.filter((r) => !r.bestModelId);
+    const skippedRounds = task.rounds.filter((r) => r.bestModelId === "skipped");
+    const otherRounds = task.rounds.filter((r) => r.bestModelId && r.bestModelId !== "skipped");
+
     if (showSkipped) {
-      return task.rounds.filter((r) => r.bestModelId === "skipped");
+      return skippedRounds;
     }
-    return task.rounds.filter((r) => !r.bestModelId || r.bestModelId === "skipped");
+    // 未评测的在前，已跳过放最后
+    return [...pendingRounds, ...skippedRounds];
   };
 
   return (
@@ -371,19 +387,14 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
       )}
 
       {/* 标题栏 */}
-      <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h2 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 600 }}>批量测试</h2>
-        <p style={{ margin: "0.25rem 0 0", fontSize: "0.8rem", color: "var(--text-muted)" }}>
-          多模型对比评测，选出最优回复
-        </p>
+        {!creating && !activeTaskId && (
+          <button type="button" className="btn btn-primary" style={{ fontSize: "0.8rem" }} onClick={startCreating}>
+            ＋ 新建
+          </button>
+        )}
       </div>
-
-      {/* 创建任务按钮 */}
-      {!creating && !activeTaskId && (
-        <button type="button" className="btn btn-primary" style={{ alignSelf: "flex-start" }} onClick={startCreating}>
-          ＋ 新建批量测试任务
-        </button>
-      )}
 
       {/* 创建任务表单 */}
       {creating && !activeTaskId && (
@@ -411,23 +422,31 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
 
           <div>
             <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 6 }}>
-              选择测试模型 <span style={{ color: "#dc2626" }}>*</span>（可多选）
+              选择测试模型 <span style={{ color: "#dc2626" }}>*</span>（可多选，最多3个）
             </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {AVAILABLE_MODELS.map((m) => {
                 const on = formModelIds.includes(m.id);
+                const disabled = !on && formModelIds.length >= 3;
                 return (
                   <label
                     key={m.id}
                     className="chip"
                     style={{
-                      cursor: "pointer",
+                      cursor: disabled ? "not-allowed" : "pointer",
                       borderColor: on ? "var(--accent)" : "var(--border)",
-                      background: on ? "var(--accent-soft)" : "var(--bg-subtle)",
+                      background: on ? "var(--accent-soft)" : disabled ? "var(--bg-subtle)" : "var(--bg-subtle)",
                       padding: "6px 12px",
+                      opacity: disabled ? 0.5 : 1,
                     }}
                   >
-                    <input type="checkbox" checked={on} style={{ marginRight: 6 }} onChange={() => toggleModel(m.id)} />
+                    <input
+                      type="checkbox"
+                      checked={on}
+                      disabled={disabled}
+                      style={{ marginRight: 6 }}
+                      onChange={() => toggleModel(m.id)}
+                    />
                     {m.label}
                   </label>
                 );
@@ -436,6 +455,9 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
             {formModelIds.length > 0 && (
               <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 8 }}>
                 已选 {formModelIds.length} 个模型：{formModelIds.map(getModelLabel).join("、")}
+                {formModelIds.length >= 3 && (
+                  <span style={{ color: "#dc2626", marginLeft: 8 }}>（已达上限）</span>
+                )}
               </div>
             )}
           </div>
@@ -514,7 +536,7 @@ export function BatchTestView({ tasks, onChangeTasks, questionBank }: Props) {
   );
 }
 
-// 评测视图 - 单题专注模式
+// 评测视图 - 横向对比模式
 interface EvaluationViewProps {
   task: BatchTestTask;
   roundId: string;
@@ -530,143 +552,149 @@ function EvaluationView({ task, roundId, onClose, onSelectBest, onSkip, getModel
 
   const currentIndex = task.rounds.findIndex((r) => r.id === roundId) + 1;
   const total = task.rounds.length;
-  const remaining = task.rounds.filter((r) => !r.bestModelId).length;
 
   return (
-    <div className="panel" style={{ flex: 1, padding: "1.5rem", display: "flex", flexDirection: "column", gap: 20 }}>
-      {/* 顶部导航 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 4 }}>
-            第 {currentIndex} / {total} 题 · 还剩 {remaining} 题待评
-          </div>
-          <div style={{ fontSize: "1rem", fontWeight: 600 }}>{task.name}</div>
+    <div className="panel" style={{ flex: 1, padding: "0.75rem 1rem", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
+      {/* 顶部导航 - 极简 */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+        <div style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
+          <strong style={{ color: "var(--text)" }}>{currentIndex}</strong> / {total}
         </div>
-        <button type="button" className="btn btn-ghost" onClick={onClose}>
-          返回概览
+        <button type="button" className="btn btn-ghost" style={{ fontSize: "0.75rem", padding: "4px 12px" }} onClick={onClose}>
+          ✕
         </button>
       </div>
 
-      {/* 进度条 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div
-          style={{
-            flex: 1,
-            height: 6,
-            background: "var(--border)",
-            borderRadius: 3,
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              width: `${(task.rounds.filter((r) => r.bestModelId).length / total) * 100}%`,
-              height: "100%",
-              background: "#16a34a",
-              transition: "width 0.3s",
-            }}
-          />
-        </div>
-        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", minWidth: 50 }}>
-          {Math.round((task.rounds.filter((r) => r.bestModelId).length / total) * 100)}%
-        </span>
-      </div>
-
-      {/* 问题卡片 */}
+      {/* 问题 - 小字体 */}
       <div
         className="panel"
         style={{
-          padding: "1.25rem",
+          padding: "0.5rem 0.75rem",
           background: "var(--accent-soft)",
-          border: "1px solid rgba(37,99,235,0.2)",
+          border: "1px solid rgba(37,99,235,0.15)",
+          flexShrink: 0,
         }}
       >
-        <div style={{ fontSize: "0.75rem", color: "var(--accent)", marginBottom: 8, fontWeight: 500 }}>
-          问题
-        </div>
-        <div style={{ fontSize: "1.1rem", lineHeight: 1.5 }}>{round.questionContent}</div>
+        <div style={{ fontSize: "0.9rem", lineHeight: 1.4 }}>{round.questionContent}</div>
       </div>
 
-      {/* 模型回复对比 */}
-      <div style={{ flex: 1, overflow: "auto" }}>
-        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 12 }}>
-          点击选择回复最优的模型
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          {task.modelIds.map((mid, idx) => {
-            const res = round.results[mid];
-            if (!res) return null;
+      {/* 模型回复对比 - 最大化展示区域 */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: task.modelIds.length === 1 ? "1fr" : task.modelIds.length === 2 ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
+          gap: 8,
+          flex: 1,
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
+        {task.modelIds.map((mid, idx) => {
+          const res = round.results[mid];
+          if (!res) return null;
 
-            return (
-              <button
-                key={mid}
-                type="button"
-                onClick={() => onSelectBest(mid)}
+          return (
+            <button
+              key={mid}
+              type="button"
+              onClick={() => onSelectBest(mid)}
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                textAlign: "left",
+                padding: "0.75rem",
+                background: "var(--bg-subtle)",
+                border: "1px solid var(--border)",
+                borderRadius: 8,
+                cursor: "pointer",
+                transition: "all 0.15s",
+                height: "100%",
+                overflow: "hidden",
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = "var(--accent)";
+                e.currentTarget.style.background = "var(--accent-soft)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = "var(--border)";
+                e.currentTarget.style.background = "var(--bg-subtle)";
+              }}
+            >
+              {/* 模型标签 */}
+              <div
                 style={{
-                  display: "block",
-                  width: "100%",
-                  textAlign: "left",
-                  padding: "1rem",
-                  background: "var(--bg-subtle)",
-                  border: "2px solid var(--border)",
-                  borderRadius: 12,
-                  cursor: "pointer",
-                  transition: "all 0.15s",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = "var(--accent)";
-                  e.currentTarget.style.background = "var(--accent-soft)";
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = "var(--border)";
-                  e.currentTarget.style.background = "var(--bg-subtle)";
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 8,
+                  paddingBottom: 6,
+                  borderBottom: "1px solid var(--border)",
                 }}
               >
-                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
-                  <span
-                    style={{
-                      padding: "4px 10px",
-                      background: "var(--accent)",
-                      color: "#fff",
-                      borderRadius: 20,
-                      fontSize: "0.75rem",
-                      fontWeight: 600,
-                    }}
-                  >
-                    模型 {String.fromCharCode(65 + idx)}
-                  </span>
-                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)", fontWeight: 500 }}>
-                    {getModelLabel(mid)}
-                  </span>
-                </div>
-                <pre
+                <span
                   style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    fontSize: "0.9rem",
-                    lineHeight: 1.5,
-                    fontFamily: "var(--font-sans)",
-                    color: "var(--text)",
-                    maxHeight: 200,
-                    overflow: "auto",
+                    padding: "2px 8px",
+                    background: "var(--accent)",
+                    color: "#fff",
+                    borderRadius: 4,
+                    fontSize: "0.7rem",
+                    fontWeight: 600,
                   }}
                 >
-                  {res.content}
-                </pre>
-              </button>
-            );
-          })}
-        </div>
+                  {String.fromCharCode(65 + idx)}
+                </span>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                  {getModelLabel(mid)}
+                </span>
+              </div>
+              {/* 回复内容 - 最大化 */}
+              <div
+                style={{
+                  flex: 1,
+                  overflow: "auto",
+                  fontSize: "0.85rem",
+                  lineHeight: 1.5,
+                  color: "var(--text)",
+                  textAlign: "left",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
+                {res.content}
+                {/* 显示图片 - 缩小并居中 */}
+                {res.images && res.images.length > 0 && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, alignItems: "center" }}>
+                    {res.images.map((imgUrl: string, imgIdx: number) => (
+                      <img
+                        key={imgIdx}
+                        src={imgUrl}
+                        alt={`生成图片 ${imgIdx + 1}`}
+                        style={{
+                          width: "auto",
+                          height: "auto",
+                          maxWidth: "100%",
+                          maxHeight: 200,
+                          objectFit: "contain",
+                          borderRadius: 6,
+                          border: "1px solid var(--border)",
+                        }}
+                        onClick={() => window.open(imgUrl, "_blank")}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* 底部操作 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, borderTop: "1px solid var(--border)" }}>
-        <button type="button" className="btn" onClick={onSkip}>
-          ⏭️ 跳过此题
+      {/* 底部 - 仅保留跳过 */}
+      <div style={{ display: "flex", justifyContent: "flex-end", flexShrink: 0 }}>
+        <button type="button" className="btn btn-ghost" style={{ fontSize: "0.75rem", padding: "4px 12px" }} onClick={onSkip}>
+          跳过
         </button>
-        <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-          点击上方模型卡片选择最优回复
-        </div>
       </div>
     </div>
   );
@@ -703,79 +731,128 @@ function TaskDetailView({
     <div className="panel" style={{ flex: 1, padding: "1.25rem", display: "flex", flexDirection: "column", gap: 16 }}>
       {/* 头部 */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <h3 style={{ margin: 0, fontSize: "1.1rem" }}>{task.name}</h3>
-            <span
-              style={{
-                padding: "4px 10px",
-                borderRadius: 20,
-                fontSize: "0.75rem",
-                fontWeight: 500,
-                background: isCompleted ? "rgba(22,163,74,0.1)" : "rgba(37,99,235,0.1)",
-                color: isCompleted ? "#16a34a" : "var(--accent)",
-              }}
-            >
-              {isCompleted ? "已完成" : "进行中"}
-            </span>
-          </div>
-          <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: 4 }}>
-            {task.modelIds.map(getModelLabel).join("、")}
-          </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <h3 style={{ margin: 0, fontSize: "1rem" }}>{task.name}</h3>
+          <span
+            style={{
+              padding: "2px 8px",
+              borderRadius: 12,
+              fontSize: "0.7rem",
+              background: isCompleted ? "rgba(22,163,74,0.1)" : "rgba(37,99,235,0.1)",
+              color: isCompleted ? "#16a34a" : "var(--accent)",
+            }}
+          >
+            {isCompleted ? "已完成" : "进行中"}
+          </span>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 6 }}>
           {!isCompleted && (
             <>
-              <button type="button" className="btn" onClick={onSave}>
+              <button type="button" className="btn" style={{ fontSize: "0.75rem" }} onClick={onSave}>
                 保存
               </button>
-              <button type="button" className="btn btn-primary" onClick={onEnd}>
-                结束任务
+              <button type="button" className="btn btn-primary" style={{ fontSize: "0.75rem" }} onClick={onEnd}>
+                结束
               </button>
             </>
           )}
-          <button type="button" className="btn btn-ghost" onClick={onClose}>
-            返回列表
+          <button type="button" className="btn btn-ghost" style={{ fontSize: "0.75rem" }} onClick={onClose}>
+            返回
           </button>
         </div>
       </div>
 
-      {/* 统计卡片 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
-        <StatCard label="总问题" value={totalCount} color="var(--text)" />
-        <StatCard label="已测" value={testedCount} color="#16a34a" />
-        <StatCard label="已评" value={selectedCount} color="#2563eb" />
-        <StatCard label="跳过" value={skippedCount} color="#ca8a04" />
+      {/* 统计卡片 - 精简 */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8 }}>
+        <StatCard label="总" value={totalCount} />
+        <StatCard label="已测" value={testedCount} />
+        <StatCard label="已评" value={selectedCount} />
+        <StatCard label="跳过" value={skippedCount} />
       </div>
 
       {/* 进度条 */}
       <div>
-        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 6 }}>
-          <span>评测进度</span>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: 4 }}>
+          <span>进度</span>
           <span>{Math.round((selectedCount / totalCount) * 100)}%</span>
         </div>
-        <div style={{ height: 8, background: "var(--border)", borderRadius: 4, overflow: "hidden" }}>
+        <div style={{ height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
           <div
             style={{
               width: `${(selectedCount / totalCount) * 100}%`,
               height: "100%",
               background: "#16a34a",
-              borderRadius: 4,
+              borderRadius: 3,
               transition: "width 0.3s",
             }}
           />
         </div>
       </div>
 
+      {/* 完成后的报告 */}
+      {isCompleted && task.summary && (
+        <div className="panel" style={{ padding: "1rem", background: "rgba(22,163,74,0.05)", border: "1px solid rgba(22,163,74,0.2)" }}>
+          <div style={{ fontSize: "0.9rem", fontWeight: 600, marginBottom: 12, color: "#16a34a" }}>
+            🏆 评测报告
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* 胜出模型 */}
+            {task.summary.bestModelId && (
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>胜出模型：</span>
+                <span style={{ fontSize: "0.9rem", fontWeight: 600, color: "#16a34a" }}>
+                  {getModelLabel(task.summary.bestModelId)}
+                </span>
+                <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                  ({task.summary.modelStats[task.summary.bestModelId]?.winCount || 0} 次胜出)
+                </span>
+              </div>
+            )}
+            {/* 各模型统计 */}
+            <div style={{ marginTop: 8 }}>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 6 }}>各模型表现：</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {task.modelIds.map((mid) => {
+                  const stats = task.summary?.modelStats[mid];
+                  if (!stats) return null;
+                  const winRate = task.summary ? Math.round((stats.winCount / task.summary.totalRounds) * 100) : 0;
+                  return (
+                    <div key={mid} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: "0.8rem" }}>
+                      <span style={{ minWidth: 100 }}>{getModelLabel(mid)}</span>
+                      <div style={{ flex: 1, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
+                        <div
+                          style={{
+                            width: `${winRate}%`,
+                            height: "100%",
+                            background: mid === task.summary?.bestModelId ? "#16a34a" : "var(--accent)",
+                            borderRadius: 3,
+                          }}
+                        />
+                      </div>
+                      <span style={{ minWidth: 50, textAlign: "right" }}>
+                        {stats.winCount}胜 ({winRate}%)
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 操作栏 */}
       {!isCompleted && (
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button
             type="button"
             className="btn btn-primary"
-            style={{ flex: 1, padding: "12px 24px", fontSize: "1rem" }}
+            style={{ flex: 1, padding: "8px 16px", fontSize: "0.9rem" }}
             onClick={() => {
-              const nextRound = task.rounds.find((r) => !r.bestModelId);
+              // 查找未评测或跳过的题目（未评测在前，跳过在后）
+              const pendingRounds = task.rounds.filter((r) => !r.bestModelId);
+              const skippedRounds = task.rounds.filter((r) => r.bestModelId === "skipped");
+              const nextRound = pendingRounds[0] || skippedRounds[0];
               if (nextRound) {
                 onStartEval(nextRound.id);
               }
@@ -785,8 +862,8 @@ function TaskDetailView({
             {selectedCount === 0 ? "开始评测" : "继续评测"}
           </button>
           {skippedCount > 0 && (
-            <button type="button" className="btn" onClick={onToggleSkipped}>
-              {showSkipped ? "隐藏跳过" : `查看跳过 (${skippedCount})`}
+            <button type="button" className="btn" style={{ fontSize: "0.75rem" }} onClick={onToggleSkipped}>
+              {showSkipped ? "隐藏" : `跳过(${skippedCount})`}
             </button>
           )}
         </div>
@@ -794,10 +871,7 @@ function TaskDetailView({
 
       {/* 问题列表 */}
       <div style={{ flex: 1, overflow: "auto" }}>
-        <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginBottom: 12 }}>
-          问题列表
-        </div>
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
           {task.rounds.map((round, idx) => {
             const status = round.bestModelId
               ? round.bestModelId === "skipped"
@@ -813,21 +887,20 @@ function TaskDetailView({
                 key={round.id}
                 className="panel"
                 style={{
-                  padding: "0.875rem 1rem",
+                  padding: "0.625rem 0.75rem",
                   display: "flex",
                   alignItems: "center",
-                  gap: 12,
-                  borderLeft: "3px solid",
+                  gap: 10,
+                  borderLeft: "2px solid",
                   borderLeftColor:
                     status === "done" ? "#16a34a" : status === "skipped" ? "#ca8a04" : "var(--border)",
-                  background: status === "pending" ? "var(--bg)" : "var(--bg-subtle)",
                 }}
               >
                 {/* 序号 */}
                 <span
                   style={{
-                    width: 28,
-                    height: 28,
+                    width: 22,
+                    height: 22,
                     borderRadius: "50%",
                     background:
                       status === "done" ? "#16a34a" : status === "skipped" ? "#ca8a04" : "var(--border)",
@@ -835,7 +908,7 @@ function TaskDetailView({
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "0.75rem",
+                    fontSize: "0.7rem",
                     fontWeight: 600,
                     flexShrink: 0,
                   }}
@@ -845,7 +918,7 @@ function TaskDetailView({
 
                 {/* 问题内容 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "0.9rem", fontWeight: 500 }}>{round.questionContent}</div>
+                  <div style={{ fontSize: "0.85rem" }}>{round.questionContent}</div>
                   {status === "done" && round.bestModelId && round.bestModelId !== "skipped" && (
                     <div style={{ fontSize: "0.75rem", color: "#16a34a", marginTop: 2 }}>
                       已选最优：{getModelLabel(round.bestModelId)}
@@ -859,9 +932,9 @@ function TaskDetailView({
                 {/* 状态标签 */}
                 <span
                   style={{
-                    padding: "4px 10px",
-                    borderRadius: 20,
-                    fontSize: "0.7rem",
+                    padding: "2px 8px",
+                    borderRadius: 10,
+                    fontSize: "0.65rem",
                     fontWeight: 500,
                     background:
                       status === "done"
@@ -873,7 +946,7 @@ function TaskDetailView({
                     flexShrink: 0,
                   }}
                 >
-                  {status === "done" ? "已评测" : status === "skipped" ? "已跳过" : "待评测"}
+                  {status === "done" ? "已评" : status === "skipped" ? "跳过" : "待评"}
                 </span>
 
                 {/* 操作按钮 */}
@@ -881,10 +954,10 @@ function TaskDetailView({
                   <button
                     type="button"
                     className="btn"
-                    style={{ fontSize: "0.75rem", padding: "6px 12px", flexShrink: 0 }}
+                    style={{ fontSize: "0.7rem", padding: "4px 10px", flexShrink: 0 }}
                     onClick={() => onStartEval(round.id)}
                   >
-                    {status === "pending" ? "评测" : "重新评"}
+                    {status === "pending" ? "评测" : "重评"}
                   </button>
                 )}
               </div>
@@ -897,19 +970,18 @@ function TaskDetailView({
 }
 
 // 统计卡片
-function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div
       className="panel"
       style={{
-        padding: "1rem",
+        padding: "0.5rem",
         textAlign: "center",
         border: "1px solid var(--border)",
-        background: "var(--bg)",
       }}
     >
-      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: "1.5rem", fontWeight: 600, color }}>{value}</div>
+      <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{label}</div>
+      <div style={{ fontSize: "1.25rem", fontWeight: 600, color: "var(--text)" }}>{value}</div>
     </div>
   );
 }
@@ -931,7 +1003,7 @@ function TaskListView({ tasks, bank, onOpenTask, onDeleteTask, getTaskProgress }
           <p>暂无任务</p>
         </div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {tasks.map((task) => {
             const { selectedCount, totalCount } = getTaskProgress(task);
             const isRunning = task.status === "running";
@@ -939,16 +1011,16 @@ function TaskListView({ tasks, bank, onOpenTask, onDeleteTask, getTaskProgress }
             const progress = Math.round((selectedCount / totalCount) * 100);
 
             return (
-              <div key={task.id} className="panel" style={{ padding: "1rem" }}>
+              <div key={task.id} className="panel" style={{ padding: "0.75rem 1rem" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <span style={{ fontSize: "1rem", fontWeight: 600 }}>{task.name}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ fontSize: "0.9rem", fontWeight: 600 }}>{task.name}</span>
                       <span
                         style={{
-                          padding: "3px 8px",
-                          borderRadius: 12,
-                          fontSize: "0.7rem",
+                          padding: "2px 8px",
+                          borderRadius: 10,
+                          fontSize: "0.65rem",
                           background: isRunning ? "rgba(37,99,235,0.1)" : "rgba(22,163,74,0.1)",
                           color: isRunning ? "var(--accent)" : "#16a34a",
                         }}
@@ -956,34 +1028,34 @@ function TaskListView({ tasks, bank, onOpenTask, onDeleteTask, getTaskProgress }
                         {isRunning ? "进行中" : "已完成"}
                       </span>
                     </div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 6 }}>
-                      {category?.name} · {task.modelIds.length} 个模型 · {selectedCount}/{totalCount} 已评
+                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: 4 }}>
+                      {category?.name} · {task.modelIds.length}模型 · {selectedCount}/{totalCount}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button type="button" className="btn" onClick={() => onOpenTask(task.id)}>
-                      {isRunning ? "继续评测" : "查看详情"}
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button type="button" className="btn" style={{ fontSize: "0.75rem" }} onClick={() => onOpenTask(task.id)}>
+                      {isRunning ? "继续" : "查看"}
                     </button>
-                    <button type="button" className="btn btn-danger" onClick={() => onDeleteTask(task.id)}>
+                    <button type="button" className="btn btn-danger" style={{ fontSize: "0.75rem" }} onClick={() => onDeleteTask(task.id)}>
                       删除
                     </button>
                   </div>
                 </div>
 
                 {/* 进度条 */}
-                <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ flex: 1, height: 6, background: "var(--border)", borderRadius: 3 }}>
+                <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, height: 4, background: "var(--border)", borderRadius: 2 }}>
                     <div
                       style={{
                         width: `${progress}%`,
                         height: "100%",
                         background: "#16a34a",
-                        borderRadius: 3,
+                        borderRadius: 2,
                         transition: "width 0.3s",
                       }}
                     />
                   </div>
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", minWidth: 35 }}>{progress}%</span>
+                  <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", minWidth: 30 }}>{progress}%</span>
                 </div>
               </div>
             );
