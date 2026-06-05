@@ -63,6 +63,15 @@ export function IntentTestView({
   const [, setIsRunning] = useState(false);
   const [runningProgress, setRunningProgress] = useState({ current: 0, total: 0 });
 
+  // Toast 状态
+  const [toast, setToast] = useState<{ show: boolean; message: string }>({ show: false, message: "" });
+
+  // 显示 toast 的辅助函数
+  const showToast = (message: string) => {
+    setToast({ show: true, message });
+    setTimeout(() => setToast({ show: false, message: "" }), 2000);
+  };
+
   // 当前数据
   const activeDataset = datasets.find((d) => d.id === activeDatasetId);
   const activeTask = tasks.find((t) => t.id === activeTaskId);
@@ -295,13 +304,25 @@ export function IntentTestView({
           const aiLabel = detectStep?.output?.trim() || null;
           const isMatch = aiLabel ? aiLabel === item.humanLabel : undefined;
 
+          // 提取图片 URL（如果有）
+          const images: string[] = [];
+          if (Array.isArray(data.data.message)) {
+            for (const msg of data.data.message) {
+              if (msg.type === "image" && msg.url) {
+                images.push(msg.url);
+              } else if (msg.type === "image_url" && msg.image?.url) {
+                images.push(msg.image.url);
+              }
+            }
+          }
+
           onChangeTasks((prev) =>
             prev.map((t) => {
               if (t.id !== task.id) return t;
               return {
                 ...t,
                 items: t.items.map((it) =>
-                  it.id === item.id ? { ...it, aiLabel, isMatch } : it
+                  it.id === item.id ? { ...it, aiLabel, isMatch, images, error: undefined } : it
                 ),
                 progress: {
                   current: i + 1,
@@ -316,6 +337,19 @@ export function IntentTestView({
         }
       } catch (error) {
         console.error("测试失败:", error);
+        const errorMsg = error instanceof Error ? error.message : "请求失败";
+
+        onChangeTasks((prev) =>
+          prev.map((t) => {
+            if (t.id !== task.id) return t;
+            return {
+              ...t,
+              items: t.items.map((it) =>
+                it.id === item.id ? { ...it, error: errorMsg } : it
+              ),
+            };
+          })
+        );
       }
 
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -358,7 +392,7 @@ export function IntentTestView({
           ? {
               ...t,
               status: "running",
-              items: t.items.map((i) => ({ ...i, aiLabel: undefined, isMatch: undefined })),
+              items: t.items.map((i) => ({ ...i, aiLabel: undefined, isMatch: undefined, error: undefined })),
               summary: undefined,
             }
           : t
@@ -367,6 +401,94 @@ export function IntentTestView({
     setActiveTaskId(task.id);
     setViewMode("running");
     setTimeout(() => runTask(task), 100);
+  };
+
+  // 运行单个评测项（用于重试）
+  const runSingleItem = async (task: IntentTestTask & { baseUrl?: string }, itemId: string) => {
+    const item = task.items.find((i) => i.id === itemId);
+    if (!item) return;
+
+    showToast(`开始重试: ${item.question.slice(0, 20)}...`);
+
+    const promptParams: Record<string, string> = {};
+    if (task.systemPrompt) {
+      promptParams.prompt_closet_chat_detect = task.systemPrompt;
+    }
+
+    try {
+      const payload: Record<string, unknown> = {
+        prompt: item.question,
+        chat_svc: task.modelId,
+        debug: "model_debug",
+      };
+
+      if (Object.keys(promptParams).length > 0) {
+        payload.prompt_params = promptParams;
+      }
+
+      const apiUrl = task.baseUrl ? `${task.baseUrl}${AI_STYLIST_API_URL}` : AI_STYLIST_API_URL;
+
+      const response = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json();
+
+      if (data.status === 1 && data.data) {
+        const debugFlow = data.data.debug_flow || data.data.debugFlow || [];
+        const detectStep = debugFlow.find(
+          (step: { template?: string; output?: string }) => step.template === "closet_chat_detect"
+        );
+        const aiLabel = detectStep?.output?.trim() || null;
+        const isMatch = aiLabel ? aiLabel === item.humanLabel : undefined;
+
+        // 提取图片 URL（如果有）
+        const images: string[] = [];
+        if (Array.isArray(data.data.message)) {
+          for (const msg of data.data.message) {
+            if (msg.type === "image" && msg.url) {
+              images.push(msg.url);
+            } else if (msg.type === "image_url" && msg.image?.url) {
+              images.push(msg.image.url);
+            }
+          }
+        }
+
+        onChangeTasks((prev) =>
+          prev.map((t) => {
+            if (t.id !== task.id) return t;
+            return {
+              ...t,
+              items: t.items.map((it) =>
+                it.id === item.id ? { ...it, aiLabel, isMatch, images, error: undefined } : it
+              ),
+              updatedAt: Date.now(),
+            };
+          })
+        );
+        showToast("重试成功");
+      } else {
+        throw new Error(data.msg || "API返回错误");
+      }
+    } catch (error) {
+      console.error("重试失败:", error);
+      const errorMsg = error instanceof Error ? error.message : "请求失败";
+
+      onChangeTasks((prev) =>
+        prev.map((t) => {
+          if (t.id !== task.id) return t;
+          return {
+            ...t,
+            items: t.items.map((it) =>
+              it.id === item.id ? { ...it, error: errorMsg } : it
+            ),
+          };
+        })
+      );
+      showToast("重试失败");
+    }
   };
 
   // ==================== 渲染 ====================
@@ -709,15 +831,15 @@ export function IntentTestView({
                     </button>
                   </div>
                 </div>
-                <div style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: 8 }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: 8 }}>
                   模型: {getModelLabel(task.modelId)} · 测试数: {task.items.length} 条 · 进度: {testedCount}/{task.items.length}
                   {testedCount > 0 && (
                     <>
-                      <span style={{ marginLeft: 8 }}>|</span>
+                      <span style={{ marginLeft: 8, opacity: 0.5 }}>|</span>
                       <span style={{ marginLeft: 8 }}>
-                        通过率: <strong style={{ color: accuracy >= 80 ? "#16a34a" : accuracy >= 60 ? "#ca8a04" : "#dc2626" }}>
+                        通过率: <span style={{ color: accuracy >= 80 ? "#16a34a" : accuracy >= 60 ? "#ca8a04" : "#dc2626", fontWeight: 500 }}>
                           {accuracy}%
-                        </strong>
+                        </span>
                       </span>
                       <span style={{ marginLeft: 8 }}>
                         匹配: <strong style={{ color: "#16a34a" }}>{matchedCount}</strong>
@@ -842,6 +964,27 @@ export function IntentTestView({
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 14, height: "100%", minHeight: 0 }}>
+        {/* Toast 提示 */}
+        {toast.show && (
+          <div
+            style={{
+              position: "fixed",
+              top: 20,
+              right: 20,
+              zIndex: 9999,
+              padding: "12px 20px",
+              background: "#16a34a",
+              color: "#fff",
+              borderRadius: 8,
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+              fontSize: "0.9rem",
+              fontWeight: 500,
+            }}
+          >
+            {toast.message}
+          </div>
+        )}
+
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -873,26 +1016,26 @@ export function IntentTestView({
         </div>
 
         {/* 统计面板 */}
-        <div className="panel" style={{ padding: "1rem", display: "flex", gap: 24 }}>
+        <div className="panel" style={{ padding: "0.75rem 1rem", display: "flex", gap: 20, alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>测试数</div>
-            <div style={{ fontSize: "1.5rem", fontWeight: 600 }}>{activeTask.items.length}</div>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>测试数</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 500, color: "var(--text)" }}>{activeTask.items.length}</div>
           </div>
           <div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>当前进度</div>
-            <div style={{ fontSize: "1.5rem", fontWeight: 600 }}>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>当前进度</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 500, color: "var(--text)" }}>
               {testedCount}/{activeTask.items.length}
-              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginLeft: 4 }}>
+              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginLeft: 4 }}>
                 ({Math.round((testedCount / activeTask.items.length) * 100)}%)
               </span>
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>通过率</div>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>通过率</div>
             <div
               style={{
-                fontSize: "1.5rem",
-                fontWeight: 600,
+                fontSize: "1.1rem",
+                fontWeight: 500,
                 color: accuracy >= 80 ? "#16a34a" : accuracy >= 60 ? "#ca8a04" : "#dc2626",
               }}
             >
@@ -900,12 +1043,12 @@ export function IntentTestView({
             </div>
           </div>
           <div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>匹配</div>
-            <div style={{ fontSize: "1.5rem", fontWeight: 600, color: "#16a34a" }}>{matchedCount}</div>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>匹配</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 500, color: "#16a34a" }}>{matchedCount}</div>
           </div>
           <div>
-            <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>不匹配</div>
-            <div style={{ fontSize: "1.5rem", fontWeight: 600, color: "#dc2626" }}>{testedCount - matchedCount}</div>
+            <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>不匹配</div>
+            <div style={{ fontSize: "1.1rem", fontWeight: 500, color: "#dc2626" }}>{testedCount - matchedCount}</div>
           </div>
         </div>
 
@@ -959,12 +1102,46 @@ export function IntentTestView({
                         ? "rgba(220,38,38,0.05)"
                         : item.isMatch === true
                         ? "rgba(22,163,74,0.05)"
+                        : item.error
+                        ? "rgba(220,38,38,0.05)"
                         : undefined,
                   }}
                 >
                   <td>{index + 1}</td>
                   <td style={{ maxWidth: 400 }}>
                     <div style={{ fontSize: "0.9rem" }}>{item.question}</div>
+                    {/* 显示图片 */}
+                    {item.images && item.images.length > 0 && (
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        {item.images.map((img: string, idx: number) => (
+                          <img
+                            key={idx}
+                            src={img}
+                            alt={`生成图片 ${idx + 1}`}
+                            style={{ maxWidth: 150, maxHeight: 150, borderRadius: 8, border: "1px solid var(--border)" }}
+                            onClick={() => window.open(img, "_blank")}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {/* 显示错误信息 */}
+                    {item.error && (
+                      <div style={{ fontSize: "0.75rem", color: "#dc2626", marginTop: 4 }}>
+                        错误: {item.error}
+                        <button
+                          type="button"
+                          className="btn"
+                          style={{ fontSize: "0.7rem", padding: "2px 8px", marginLeft: 8 }}
+                          onClick={() => {
+                            if (activeTask) {
+                              runSingleItem(activeTask, item.id);
+                            }
+                          }}
+                        >
+                          重试
+                        </button>
+                      </div>
+                    )}
                   </td>
                   <td>
                     {item.humanLabel ? (
@@ -985,9 +1162,15 @@ export function IntentTestView({
                     )}
                   </td>
                   <td>
-                    {item.isMatch === true && <span style={{ color: "#16a34a", fontWeight: 600 }}>✓ 一致</span>}
-                    {item.isMatch === false && <span style={{ color: "#dc2626", fontWeight: 600 }}>✗ 不一致</span>}
-                    {item.isMatch === undefined && <span style={{ color: "var(--text-muted)" }}>—</span>}
+                    {item.error ? (
+                      <span style={{ color: "#dc2626", fontWeight: 600 }}>✗ 失败</span>
+                    ) : item.isMatch === true ? (
+                      <span style={{ color: "#16a34a", fontWeight: 600 }}>✓ 一致</span>
+                    ) : item.isMatch === false ? (
+                      <span style={{ color: "#dc2626", fontWeight: 600 }}>✗ 不一致</span>
+                    ) : (
+                      <span style={{ color: "var(--text-muted)" }}>—</span>
+                    )}
                   </td>
                 </tr>
               ))}

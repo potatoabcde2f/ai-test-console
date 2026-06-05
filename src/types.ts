@@ -287,6 +287,10 @@ export interface IntentTestItem {
   aiLabel?: string;
   /** 是否匹配 */
   isMatch?: boolean;
+  /** 生成的图片URL列表 */
+  images?: string[];
+  /** 错误信息 */
+  error?: string;
   createdAt: number;
 }
 
