@@ -31,6 +31,7 @@ interface Message {
 interface APIConfig {
   baseUrl: string;
   chatSvc: string;
+  uid: string;
   promptClosetChat: string;
   promptClosetChatSum: string;
   promptClosetChatImage: string;
@@ -211,6 +212,7 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
 {{conversation}}`;  const [config, setConfig] = useState<APIConfig>({
     baseUrl: "http://192.168.15.62:8082",
     chatSvc: "closet_gpt54mini",
+    uid: "",
     promptClosetChat: "",
     promptClosetChatSum: "",
     promptClosetChatImage: "",
@@ -221,6 +223,19 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
     debug: "model_debug",
     followUpPrompt: DEFAULT_FOLLOW_UP_PROMPT,
   });
+
+  // 获取实际使用的 API URL
+  // 本地开发使用相对路径让 Vite 代理生效，生产环境使用完整 URL
+  const getApiUrl = () => {
+    const isDev = typeof window !== "undefined" && window.location.hostname === "localhost";
+    if (isDev) {
+      // 本地开发：使用相对路径，让 Vite 代理转发
+      return AI_STYLIST_API_URL;
+    }
+    // 生产环境：使用配置的 baseUrl
+    const baseUrl = config.baseUrl || "http://192.168.15.62:8082";
+    return `${baseUrl}${AI_STYLIST_API_URL}`;
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -464,18 +479,26 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
       }
 
       console.log("发送 payload:", payload);
+      console.log("发送 headers:", { uid: config.uid || "" });
 
-      // 更新用户消息，添加请求 payload
+      // 更新用户消息，添加请求 payload（包含 headers 信息供调试）
+      const requestWithHeaders = {
+        ...payload,
+        _headers: { uid: config.uid || "" },
+      };
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === userMsg.id ? { ...m, metadata: { ...m.metadata, requestPayload: payload } } : m
+          m.id === userMsg.id ? { ...m, metadata: { ...m.metadata, requestPayload: requestWithHeaders } } : m
         )
       );
 
-      const apiUrl = config.baseUrl ? `${config.baseUrl}${AI_STYLIST_API_URL}` : AI_STYLIST_API_URL;
+      const apiUrl = getApiUrl();
       const response = await fetch(apiUrl, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "uid": config.uid || "",
+        },
         body: JSON.stringify(payload),
       });
 
@@ -582,10 +605,29 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
         setMessages((prev) => [...prev, errorMsg]);
       }
     } catch (error) {
+      let errorContent = "请求失败";
+
+      if (error instanceof Error) {
+        // 检测混合内容问题
+        if (error.message.includes("Failed to fetch") || error.message.includes("NetworkError")) {
+          const isHttps = window.location.protocol === "https:";
+          const apiUrl = getApiUrl();
+          const isHttpApi = apiUrl.startsWith("http://");
+
+          if (isHttps && isHttpApi) {
+            errorContent = `【混合内容阻止】当前页面使用 HTTPS，但 API 使用 HTTP (${apiUrl})。\n\n浏览器安全策略阻止了此请求。\n\n解决方案：\n1. 使用本地开发环境运行：npm run dev\n2. 或将 API 服务器配置 HTTPS\n3. 或在内网部署此应用`;
+          } else {
+            errorContent = `请求失败: ${error.message}`;
+          }
+        } else {
+          errorContent = `请求失败: ${error.message}`;
+        }
+      }
+
       const errorMsg: Message = {
         id: generateId(),
         role: "assistant",
-        content: `请求失败: ${error instanceof Error ? error.message : "网络错误"}`,
+        content: errorContent,
         timestamp: Date.now(),
       };
       setMessages((prev) => [...prev, errorMsg]);
@@ -800,8 +842,33 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
     });
   }, [messages, chatId, config, loading, AI_STYLIST_API_URL, generateFollowUpQuestions]);
 
+  // 检测混合内容问题
+  const isHttps = typeof window !== "undefined" && window.location.protocol === "https:";
+  const apiUrl = getApiUrl();
+  const isHttpApi = apiUrl.startsWith("http://");
+  const hasMixedContent = isHttps && isHttpApi;
+
   return (
     <div className="api-dialogue-view" style={{ display: "flex", flexDirection: "column" }}>
+      {/* 混合内容警告 */}
+      {hasMixedContent && (
+        <div style={{
+          padding: "0.75rem 1rem",
+          background: "#fef3c7",
+          border: "1px solid #f59e0b",
+          color: "#92400e",
+          fontSize: "0.8rem",
+        }}>
+          <strong>⚠️ 网络配置警告</strong>：当前页面使用 HTTPS，但 API 使用 HTTP。
+          浏览器会阻止此请求。<br />
+          <strong>解决方案：</strong>
+          <a href="http://localhost:5173/ai-test-console/" style={{ color: "#92400e", textDecoration: "underline" }}>
+            使用本地开发环境 (npm run dev)
+          </a>
+          或配置 API 服务器 HTTPS。
+        </div>
+      )}
+
       {/* Toast 提示 */}
       {toast.show && (
         <div className="toast-notification">
@@ -892,6 +959,16 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
               </select>
             </div>
             <div>
+              <label className="label">uid (用户ID)</label>
+              <input
+                type="text"
+                className="input"
+                value={config.uid}
+                onChange={(e) => setConfig((c) => ({ ...c, uid: e.target.value }))}
+                placeholder="输入用户ID，用于用户态请求"
+              />
+            </div>
+            <div>
               <label className="label">debug</label>
               <input
                 type="text"
@@ -899,46 +976,6 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
                 value={config.debug}
                 onChange={(e) => setConfig((c) => ({ ...c, debug: e.target.value }))}
                 placeholder="model_debug"
-              />
-            </div>
-            <div>
-              <label className="label">prompt_closet_chat</label>
-              <input
-                type="text"
-                className="input"
-                value={config.promptClosetChat}
-                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChat: e.target.value }))}
-                placeholder="自定义 chat prompt"
-              />
-            </div>
-            <div>
-              <label className="label">prompt_closet_chat_sum</label>
-              <input
-                type="text"
-                className="input"
-                value={config.promptClosetChatSum}
-                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatSum: e.target.value }))}
-                placeholder="自定义 summary prompt"
-              />
-            </div>
-            <div>
-              <label className="label">prompt_closet_chat_image</label>
-              <input
-                type="text"
-                className="input"
-                value={config.promptClosetChatImage}
-                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatImage: e.target.value }))}
-                placeholder="自定义 image prompt"
-              />
-            </div>
-            <div>
-              <label className="label">prompt_closet_trend_filter</label>
-              <input
-                type="text"
-                className="input"
-                value={config.promptClosetTrendFilter}
-                onChange={(e) => setConfig((c) => ({ ...c, promptClosetTrendFilter: e.target.value }))}
-                placeholder="自定义 trend filter"
               />
             </div>
             <div>
@@ -952,6 +989,36 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
               />
             </div>
             <div>
+              <label className="label">prompt_img_extract_system</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptImgExtractSystem}
+                onChange={(e) => setConfig((c) => ({ ...c, promptImgExtractSystem: e.target.value }))}
+                placeholder="自定义 img extract system prompt"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_chat</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetChat}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChat: e.target.value }))}
+                placeholder="自定义 chat prompt"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_chat_image</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetChatImage}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatImage: e.target.value }))}
+                placeholder="自定义 image prompt"
+              />
+            </div>
+            <div>
               <label className="label">prompt_closet_chat_product</label>
               <input
                 type="text"
@@ -962,13 +1029,23 @@ const DEFAULT_FOLLOW_UP_PROMPT = `你是一个穿搭追问模拟器。
               />
             </div>
             <div>
-              <label className="label">prompt_img_extract_system</label>
+              <label className="label">prompt_closet_trend_filter</label>
               <input
                 type="text"
                 className="input"
-                value={config.promptImgExtractSystem}
-                onChange={(e) => setConfig((c) => ({ ...c, promptImgExtractSystem: e.target.value }))}
-                placeholder="自定义 img extract system prompt"
+                value={config.promptClosetTrendFilter}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetTrendFilter: e.target.value }))}
+                placeholder="自定义 trend filter"
+              />
+            </div>
+            <div>
+              <label className="label">prompt_closet_chat_sum</label>
+              <input
+                type="text"
+                className="input"
+                value={config.promptClosetChatSum}
+                onChange={(e) => setConfig((c) => ({ ...c, promptClosetChatSum: e.target.value }))}
+                placeholder="自定义 summary prompt"
               />
             </div>
             <div style={{ gridColumn: "span 2" }}>

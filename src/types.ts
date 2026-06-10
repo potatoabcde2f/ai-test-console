@@ -162,7 +162,8 @@ export type NavKey =
   | "promptCompare"
   | "questionBank"
   | "batchTest"
-  | "intentTest";
+  | "intentTest"
+  | "platformIntro";
 
 // 问题库相关类型
 export interface Question {
@@ -209,6 +210,17 @@ export interface BatchTestResult {
   imageGenPrompt?: string;
   /** 创建时间 */
   createdAt: number;
+  // 单模型批量测试白盒数据
+  /** 意图识别结果 (closet_chat_detect) */
+  intentDetect?: string;
+  /** 记忆检索 (memory_search) */
+  memorySearch?: string;
+  /** 用户画像 (user_profile) */
+  userProfileData?: string;
+  /** 生图提示词 (closet_chat 节点内容，当 intentDetect=1 时) */
+  imageGenPromptData?: string;
+  /** 完整回答 (closet_chat) */
+  fullResponse?: string;
 }
 
 /** 批量测试任务的单个问题轮次 */
@@ -265,6 +277,20 @@ export interface BatchTestTask {
     endedAt: number;
   };
   createdAt: number;
+  /** 扩展字段：API基础地址 */
+  baseUrl?: string;
+  /** 扩展字段：测试UID */
+  testUid?: string;
+  /** 扩展字段：Prompt参数配置 */
+  promptParams?: Record<string, string>;
+  /** 扩展字段：是否为Prompt对比模式 */
+  isPromptCompare?: boolean;
+  /** 扩展字段：Prompt对比参数键 */
+  promptCompareKey?: string;
+  /** 扩展字段：Prompt对比值列表 */
+  promptCompareValues?: { key: string; label: string; value: string }[];
+  /** 扩展字段：是否每个问题使用不同UID（数据隔离） */
+  isolateUid?: boolean;
 }
 
 /** 批量测试配置（用于快速复用） */

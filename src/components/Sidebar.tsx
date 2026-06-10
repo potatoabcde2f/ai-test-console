@@ -2,6 +2,7 @@ import type { NavKey } from "../types";
 import { PERSISTENCE_KEY } from "../lib/storage";
 
 const ITEMS: { key: NavKey; label: string; icon: string }[] = [
+  { key: "platformIntro", label: "平台介绍", icon: "📖" },
   { key: "dialogue", label: "原始对话测试", icon: "💬" },
   { key: "prompts", label: "提示词存储", icon: "📝" },
   { key: "conversations", label: "对话结果存储", icon: "📂" },

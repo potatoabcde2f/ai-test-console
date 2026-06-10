@@ -26,6 +26,7 @@ import { PromptCompareView } from "./views/PromptCompareView";
 import { QuestionBankView } from "./views/QuestionBankView";
 import { BatchTestView } from "./views/BatchTestView";
 import { IntentTestView } from "./views/IntentTestView";
+import { PlatformIntroView } from "./views/PlatformIntroView";
 import { MODEL_PRESETS, IMAGE_GEN_MODELS } from "./lib/models";
 import { DEFAULT_PROMPTS } from "./lib/defaultPrompts";
 import { uid } from "./lib/ids";
@@ -286,6 +287,7 @@ export function App() {
       <Sidebar active={nav} onNavigate={setNav} />
       <main className="main-area">
         <div className="main-scroll">
+          {nav === "platformIntro" && <PlatformIntroView />}
           {nav === "dialogue" && (
             <DialogueTestView
               onSaveToConversations={(conv) => setConversations((prev) => [conv, ...prev])}
