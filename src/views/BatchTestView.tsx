@@ -726,21 +726,6 @@ function TaskDetailView({
 }: TaskDetailViewProps) {
   const { testedCount, totalCount, selectedCount, skippedCount } = getTaskProgress(task);
   const isCompleted = task.status === "completed";
-  const [viewingRoundId, setViewingRoundId] = useState<string | null>(null);
-
-  const viewingRound = viewingRoundId ? task.rounds.find((r) => r.id === viewingRoundId) : null;
-
-  // 查看结果视图
-  if (viewingRound) {
-    return (
-      <ResultView
-        task={task}
-        round={viewingRound}
-        onClose={() => setViewingRoundId(null)}
-        getModelLabel={getModelLabel}
-      />
-    );
-  }
 
   return (
     <div className="panel" style={{ flex: 1, padding: "1.25rem", display: "flex", flexDirection: "column", gap: 16 }}>
@@ -1246,3 +1231,4 @@ function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
     </div>
   );
 }
+
