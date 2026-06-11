@@ -1554,9 +1554,24 @@ function TaskDetailView({
                       status === "done" ? "#16a34a" : status === "skipped" ? "#ca8a04" : "var(--border)",
                   }}
                 >
-<<<<<<< HEAD
-                  {idx + 1}
-                </span>
+                  <span
+                    style={{
+                      width: 22,
+                      height: 22,
+                      borderRadius: "50%",
+                      background:
+                        status === "done" ? "#16a34a" : status === "skipped" ? "#ca8a04" : "var(--border)",
+                      color: status === "pending" ? "var(--text-muted)" : "#fff",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      flexShrink: 0,
+                    }}
+                  >
+                    {idx + 1}
+                  </span>
 
                 {/* 问题内容 */}
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1618,79 +1633,6 @@ function TaskDetailView({
             );
           })}
         </div>
-=======
-                  {/* 序号 */}
-                  <span
-                    style={{
-                      width: 22,
-                      height: 22,
-                      borderRadius: "50%",
-                      background:
-                        status === "done" ? "#16a34a" : status === "skipped" ? "#ca8a04" : "var(--border)",
-                      color: status === "pending" ? "var(--text-muted)" : "#fff",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "0.7rem",
-                      fontWeight: 600,
-                      flexShrink: 0,
-                    }}
-                  >
-                    {idx + 1}
-                  </span>
-
-                  {/* 问题内容 */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: "0.85rem" }}>{round.questionContent}</div>
-                    {status === "done" && round.bestModelId && round.bestModelId !== "skipped" && (
-                      <div style={{ fontSize: "0.75rem", color: "#16a34a", marginTop: 2 }}>
-                        已选最优：{task.isPromptCompare ? round.bestModelId : getModelLabel(round.bestModelId)}
-                      </div>
-                    )}
-                    {status === "skipped" && (
-                      <div style={{ fontSize: "0.75rem", color: "#ca8a04", marginTop: 2 }}>已跳过</div>
-                    )}
-                  </div>
-
-                  {/* 状态标签 */}
-                  <span
-                    style={{
-                      padding: "2px 8px",
-                      borderRadius: 10,
-                      fontSize: "0.65rem",
-                      fontWeight: 500,
-                      background:
-                        status === "done"
-                          ? "rgba(22,163,74,0.1)"
-                          : status === "skipped"
-                          ? "rgba(202,138,4,0.1)"
-                          : "rgba(37,99,235,0.1)",
-                      color: status === "done" ? "#16a34a" : status === "skipped" ? "#ca8a04" : "var(--accent)",
-                      flexShrink: 0,
-                    }}
-                  >
-                    {status === "done" ? "已评" : status === "skipped" ? "跳过" : "待评"}
-                  </span>
-
-                  {/* 操作按钮 */}
-                  <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
-                    {(status === "done" || status === "skipped") && (
-                      <button
-                        type="button"
-                        className="btn"
-                        style={{ fontSize: "0.7rem", padding: "4px 10px" }}
-                        onClick={() => setViewingRoundId(round.id)}
-                      >
-                        查看
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
->>>>>>> 7c778ea (更新批量测试功能：Prompt对比模式、UID数据隔离、浏览模式等)
       </div>
     </div>
   );
@@ -1830,14 +1772,6 @@ function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
   const roundIndex = task.rounds.findIndex((r) => r.id === round.id) + 1;
   const total = task.rounds.length;
 
-<<<<<<< HEAD
-=======
-  // Prompt对比模式：使用 Prompt A/B 作为选项
-  const compareKeys = task.isPromptCompare && task.promptCompareValues
-    ? task.promptCompareValues.map((v) => v.label)
-    : task.modelIds;
-
->>>>>>> 7c778ea (更新批量测试功能：Prompt对比模式、UID数据隔离、浏览模式等)
   return (
     <div className="panel" style={{ flex: 1, padding: "0.75rem 1rem", display: "flex", flexDirection: "column", gap: 8, minHeight: 0 }}>
       {/* 顶部导航 */}
@@ -1848,11 +1782,7 @@ function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
           </span>
           {round.bestModelId && round.bestModelId !== "skipped" && (
             <span style={{ fontSize: "0.7rem", padding: "2px 8px", background: "#16a34a", color: "#fff", borderRadius: 10 }}>
-<<<<<<< HEAD
               已选 {getModelLabel(round.bestModelId)}
-=======
-              已选 {task.isPromptCompare ? round.bestModelId : getModelLabel(round.bestModelId)}
->>>>>>> 7c778ea (更新批量测试功能：Prompt对比模式、UID数据隔离、浏览模式等)
             </span>
           )}
           {round.bestModelId === "skipped" && (
@@ -1879,26 +1809,17 @@ function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
         <div style={{ fontSize: "0.9rem", lineHeight: 1.4 }}>{round.questionContent}</div>
       </div>
 
-<<<<<<< HEAD
       {/* 模型回复对比 */}
       <div
         style={{
           display: "grid",
           gridTemplateColumns: task.modelIds.length === 1 ? "1fr" : task.modelIds.length === 2 ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
-=======
-      {/* 回复对比 */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: compareKeys.length === 1 ? "1fr" : compareKeys.length === 2 ? "repeat(2, 1fr)" : "repeat(3, 1fr)",
->>>>>>> 7c778ea (更新批量测试功能：Prompt对比模式、UID数据隔离、浏览模式等)
           gap: 8,
           flex: 1,
           minHeight: 0,
           overflow: "hidden",
         }}
       >
-<<<<<<< HEAD
         {task.modelIds.map((mid, idx) => {
           const res = round.results[mid];
           if (!res) return null;
@@ -1907,16 +1828,6 @@ function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
           return (
             <div
               key={mid}
-=======
-        {compareKeys.map((key, idx) => {
-          const res = round.results[key];
-          if (!res) return null;
-          const isWinner = round.bestModelId === key;
-
-          return (
-            <div
-              key={key}
->>>>>>> 7c778ea (更新批量测试功能：Prompt对比模式、UID数据隔离、浏览模式等)
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -1929,11 +1840,7 @@ function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
                 overflow: "hidden",
               }}
             >
-<<<<<<< HEAD
               {/* 模型标签 */}
-=======
-              {/* 选项标签 */}
->>>>>>> 7c778ea (更新批量测试功能：Prompt对比模式、UID数据隔离、浏览模式等)
               <div
                 style={{
                   display: "flex",
@@ -1957,11 +1864,7 @@ function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
                   {String.fromCharCode(65 + idx)}
                 </span>
                 <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", flex: 1 }}>
-<<<<<<< HEAD
                   {getModelLabel(mid)}
-=======
-                  {task.isPromptCompare ? key : getModelLabel(key)}
->>>>>>> 7c778ea (更新批量测试功能：Prompt对比模式、UID数据隔离、浏览模式等)
                 </span>
                 {isWinner && <span style={{ fontSize: "0.7rem", color: "#16a34a", fontWeight: 600 }}>✓ 胜出</span>}
               </div>
@@ -2011,531 +1914,3 @@ function ResultView({ task, round, onClose, getModelLabel }: ResultViewProps) {
   );
 }
 
-<<<<<<< HEAD
-=======
-
-// 单模型测试表格视图
-interface SingleModelTableViewProps {
-  task: BatchTestTask;
-  setViewingRoundId: (id: string | null) => void;
-  getModelLabel: (id: string) => string;
-}
-
-function SingleModelTableView({ task, getModelLabel }: SingleModelTableViewProps) {
-  const [expandedImage, setExpandedImage] = useState<string | null>(null);
-  const [expandedContent, setExpandedContent] = useState<{ title: string; content: string } | null>(null);
-  const [browseMode, setBrowseMode] = useState(false);
-  const [browseIndex, setBrowseIndex] = useState(0);
-  const modelId = task.modelIds[0];
-  const modelLabel = task.modelIds.length > 0 ? getModelLabel(modelId) : "默认模型";
-
-  // 处理双击展开内容
-  const handleDoubleClick = (title: string, content: string) => {
-    if (content && content !== "—") {
-      setExpandedContent({ title, content });
-    }
-  };
-
-  // 进入浏览模式
-  const enterBrowseMode = (index: number) => {
-    setBrowseIndex(index);
-    setBrowseMode(true);
-  };
-
-  // 上一题
-  const prevQuestion = () => {
-    if (browseIndex > 0) {
-      setBrowseIndex(browseIndex - 1);
-    }
-  };
-
-  // 下一题
-  const nextQuestion = () => {
-    if (browseIndex < task.rounds.length - 1) {
-      setBrowseIndex(browseIndex + 1);
-    }
-  };
-
-  // 浏览模式视图
-  if (browseMode) {
-    const round = task.rounds[browseIndex];
-    const result = round.results[modelId];
-    const hasContent = result?.content && result.content.trim().length > 0;
-    const hasImages = result?.images && result.images.length > 0;
-    const hasData = hasContent || hasImages;
-
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 8, height: "100%" }}>
-        {/* 顶部导航 */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0.5rem 0" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              <strong style={{ color: "var(--text)" }}>{browseIndex + 1}</strong> / {task.rounds.length}
-            </span>
-            <span style={{ fontSize: "0.8rem", color: "var(--text-muted)" }}>
-              测试模型：<strong>{modelLabel}</strong>
-            </span>
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button
-              type="button"
-              className="btn"
-              style={{ fontSize: "0.75rem" }}
-              onClick={prevQuestion}
-              disabled={browseIndex === 0}
-            >
-              ← 上一题
-            </button>
-            <button
-              type="button"
-              className="btn"
-              style={{ fontSize: "0.75rem" }}
-              onClick={nextQuestion}
-              disabled={browseIndex === task.rounds.length - 1}
-            >
-              下一题 →
-            </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              style={{ fontSize: "0.75rem" }}
-              onClick={() => setBrowseMode(false)}
-            >
-              ✕ 退出浏览
-            </button>
-          </div>
-        </div>
-
-        {/* 问题 */}
-        <div
-          className="panel"
-          style={{
-            padding: "0.75rem 1rem",
-            background: "var(--accent-soft)",
-            border: "1px solid rgba(37,99,235,0.15)",
-            flexShrink: 0,
-          }}
-        >
-          <div style={{ fontSize: "0.9rem", lineHeight: 1.4 }}>{round.questionContent}</div>
-        </div>
-
-        {/* 白盒数据展示 */}
-        {result && (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {result.intentDetect && (
-              <div style={{ padding: "4px 8px", background: "var(--bg-subtle)", borderRadius: 4, fontSize: "0.75rem" }}>
-                意图：<span style={{ color: result.intentDetect === "1" ? "var(--accent)" : "var(--text)" }}>{result.intentDetect}</span>
-              </div>
-            )}
-            {result.memorySearch && (
-              <div style={{ padding: "4px 8px", background: "var(--bg-subtle)", borderRadius: 4, fontSize: "0.75rem" }}>
-                记忆：已检索
-              </div>
-            )}
-            {result.intentDetect === "1" && result.imageGenPromptData && (
-              <div
-                style={{ padding: "4px 8px", background: "var(--bg-subtle)", borderRadius: 4, fontSize: "0.75rem", cursor: "pointer" }}
-                onClick={() => handleDoubleClick("生图提示词", result.imageGenPromptData || "")}
-              >
-                生图提示词：点击查看
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* 回复内容 */}
-        <div
-          className="panel"
-          style={{
-            flex: 1,
-            padding: "1rem",
-            overflow: "auto",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-          }}
-        >
-          {!hasData ? (
-            <div style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>
-              暂无回复数据
-            </div>
-          ) : (
-            <>
-              {/* 文字回复 */}
-              {hasContent && (
-                <div style={{ fontSize: "0.9rem", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                  {result.content}
-                </div>
-              )}
-
-              {/* 图片 */}
-              {hasImages && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                  {result.images!.map((imgUrl: string, imgIdx: number) => (
-                    <img
-                      key={imgIdx}
-                      src={imgUrl}
-                      alt={`生成图片 ${imgIdx + 1}`}
-                      style={{
-                        maxWidth: "100%",
-                        maxHeight: 400,
-                        objectFit: "contain",
-                        borderRadius: 8,
-                        border: "1px solid var(--border)",
-                        cursor: "pointer",
-                        alignSelf: "flex-start",
-                      }}
-                      onClick={() => setExpandedImage(imgUrl)}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* 图片放大弹窗 */}
-        {expandedImage && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0,0,0,0.8)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 9999,
-              padding: "2rem",
-            }}
-            onClick={() => setExpandedImage(null)}
-          >
-            <img
-              src={expandedImage}
-              alt="放大图片"
-              style={{
-                maxWidth: "90%",
-                maxHeight: "90%",
-                objectFit: "contain",
-                borderRadius: 8,
-              }}
-            />
-          </div>
-        )}
-
-        {/* 内容展开弹窗 */}
-        {expandedContent && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              background: "rgba(0,0,0,0.6)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 9999,
-              padding: "2rem",
-            }}
-            onClick={() => setExpandedContent(null)}
-          >
-            <div
-              style={{
-                background: "var(--bg)",
-                borderRadius: 12,
-                padding: "1.5rem",
-                maxWidth: 800,
-                maxHeight: "80vh",
-                width: "100%",
-                overflow: "auto",
-                boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <h3 style={{ margin: 0, fontSize: "1rem" }}>{expandedContent.title}</h3>
-                <button
-                  type="button"
-                  className="btn btn-ghost"
-                  style={{ fontSize: "0.75rem", padding: "4px 12px" }}
-                  onClick={() => setExpandedContent(null)}
-                >
-                  ✕ 关闭
-                </button>
-              </div>
-              <div
-                style={{
-                  fontSize: "0.9rem",
-                  lineHeight: 1.6,
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
-                  color: "var(--text)",
-                  fontFamily: "var(--font-sans)",
-                }}
-              >
-                {expandedContent.content || "（无内容）"}
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // 表格模式
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-      {/* 模型信息 */}
-      <div style={{ fontSize: "0.8rem", color: "var(--text-muted)", padding: "0.5rem 0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span>测试模型：<strong>{modelLabel}</strong></span>
-        {task.rounds.length > 0 && (
-          <button
-            type="button"
-            className="btn btn-primary"
-            style={{ fontSize: "0.75rem" }}
-            onClick={() => enterBrowseMode(0)}
-          >
-            进入浏览模式
-          </button>
-        )}
-      </div>
-
-      {/* 表格 */}
-      <div className="panel" style={{ padding: 0, overflow: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
-          <thead>
-            <tr style={{ background: "var(--bg-subtle)" }}>
-              <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--border)", width: 40 }}>#</th>
-              <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--border)", minWidth: 150 }}>问题</th>
-              <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--border)", width: 80 }}>意图识别</th>
-              <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--border)", minWidth: 120 }}>记忆检索</th>
-              <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--border)", minWidth: 120 }}>生图提示词</th>
-              <th style={{ padding: "8px", textAlign: "left", borderBottom: "1px solid var(--border)", minWidth: 200 }}>答案</th>
-              <th style={{ padding: "8px", textAlign: "center", borderBottom: "1px solid var(--border)", width: 80 }}>操作</th>
-            </tr>
-          </thead>
-          <tbody>
-            {task.rounds.map((round, idx) => {
-              const result = round.results[modelId];
-              const isTested = !!result;
-              const hasTextContent = result?.content && result.content.trim().length > 0;
-              const hasImages = result?.images && result.images.length > 0;
-
-              return (
-                <tr key={round.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td style={{ padding: "8px" }}>{idx + 1}</td>
-                  <td
-                    style={{ padding: "8px", maxWidth: 200, cursor: "pointer" }}
-                    onDoubleClick={() => handleDoubleClick("问题", round.questionContent)}
-                    title="双击查看完整内容"
-                  >
-                    <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {round.questionContent}
-                    </div>
-                  </td>
-                  <td style={{ padding: "8px" }}>
-                    {isTested ? (
-                      <span
-                        style={{
-                          padding: "2px 6px",
-                          borderRadius: 4,
-                          fontSize: "0.75rem",
-                          background: result?.intentDetect === "1" ? "rgba(37,99,235,0.1)" : "var(--bg-subtle)",
-                          color: result?.intentDetect === "1" ? "var(--accent)" : "var(--text)",
-                        }}
-                      >
-                        {result?.intentDetect || "—"}
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td
-                    style={{ padding: "8px", cursor: "pointer" }}
-                    onDoubleClick={() => handleDoubleClick("记忆检索", result?.memorySearch || "")}
-                    title="双击查看完整内容"
-                  >
-                    {isTested ? (
-                      <div style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {result?.memorySearch || "—"}
-                      </div>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td
-                    style={{ padding: "8px", cursor: "pointer" }}
-                    onDoubleClick={() => handleDoubleClick("生图提示词", result?.imageGenPromptData || "")}
-                    title="双击查看完整内容"
-                  >
-                    {isTested && result?.intentDetect === "1" ? (
-                      <div style={{ maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {result?.imageGenPromptData || "—"}
-                      </div>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td
-                    style={{ padding: "8px", cursor: "pointer" }}
-                    onDoubleClick={() => handleDoubleClick("答案", result?.fullResponse || result?.content || "")}
-                    title="双击查看完整内容"
-                  >
-                    {isTested ? (
-                      <div>
-                        {/* 文字内容 - 只显示文字，不显示"无文字回复" */}
-                        {hasTextContent && (
-                          <div style={{ maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {result.content}
-                          </div>
-                        )}
-                        {/* 图片缩略图 */}
-                        {hasImages && (
-                          <div style={{ display: "flex", gap: 4, marginTop: hasTextContent ? 4 : 0 }}>
-                            {result.images!.map((imgUrl: string, imgIdx: number) => (
-                              <img
-                                key={imgIdx}
-                                src={imgUrl}
-                                alt={`图片 ${imgIdx + 1}`}
-                                style={{
-                                  width: 40,
-                                  height: 40,
-                                  objectFit: "cover",
-                                  borderRadius: 4,
-                                  border: "1px solid var(--border)",
-                                  cursor: "pointer",
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setExpandedImage(imgUrl);
-                                }}
-                              />
-                            ))}
-                          </div>
-                        )}
-                        {/* 既没有文字也没有图片 */}
-                        {!hasTextContent && !hasImages && (
-                          <span style={{ color: "var(--text-muted)" }}>（无回复内容）</span>
-                        )}
-                      </div>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
-                  <td style={{ padding: "8px", textAlign: "center" }}>
-                    {isTested ? (
-                      <button
-                        type="button"
-                        className="btn"
-                        style={{ fontSize: "0.7rem", padding: "4px 8px" }}
-                        onClick={() => enterBrowseMode(idx)}
-                      >
-                        浏览
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>—</span>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* 图片放大弹窗 */}
-      {expandedImage && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.8)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "2rem",
-          }}
-          onClick={() => setExpandedImage(null)}
-        >
-          <img
-            src={expandedImage}
-            alt="放大图片"
-            style={{
-              maxWidth: "90%",
-              maxHeight: "90%",
-              objectFit: "contain",
-              borderRadius: 8,
-            }}
-          />
-        </div>
-      )}
-
-      {/* 内容展开弹窗 */}
-      {expandedContent && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.6)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 9999,
-            padding: "2rem",
-          }}
-          onClick={() => setExpandedContent(null)}
-        >
-          <div
-            style={{
-              background: "var(--bg)",
-              borderRadius: 12,
-              padding: "1.5rem",
-              maxWidth: 800,
-              maxHeight: "80vh",
-              width: "100%",
-              overflow: "auto",
-              boxShadow: "0 20px 50px rgba(0,0,0,0.3)",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-              <h3 style={{ margin: 0, fontSize: "1rem" }}>{expandedContent.title}</h3>
-              <button
-                type="button"
-                className="btn btn-ghost"
-                style={{ fontSize: "0.75rem", padding: "4px 12px" }}
-                onClick={() => setExpandedContent(null)}
-              >
-                ✕ 关闭
-              </button>
-            </div>
-            <div
-              style={{
-                fontSize: "0.9rem",
-                lineHeight: 1.6,
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                color: "var(--text)",
-                fontFamily: "var(--font-sans)",
-              }}
-            >
-              {expandedContent.content || "（无内容）"}
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
->>>>>>> 7c778ea (更新批量测试功能：Prompt对比模式、UID数据隔离、浏览模式等)
